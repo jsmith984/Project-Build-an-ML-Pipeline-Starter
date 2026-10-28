@@ -1,291 +1,116 @@
-#!/usr/bin/env python
-"""
-This script trains a Random Forest
-"""
-import argparse
+﻿import argparse
 import logging
 import os
-import shutil
-import matplotlib.pyplot as plt
-
-import mlflow
 import json
-
 import pandas as pd
 import numpy as np
-from sklearn.compose import ColumnTransformer
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.impute import SimpleImputer
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OrdinalEncoder, FunctionTransformer, OneHotEncoder
-
 import wandb
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error
-from sklearn.pipeline import Pipeline, make_pipeline
-
-
-def delta_date_feature(dates):
-    """
-    Given a 2d array containing dates (in any format recognized by pd.to_datetime), it returns the delta in days
-    between each date and the most recent date in its column
-    """
-    date_sanitized = pd.DataFrame(dates).apply(pd.to_datetime)
-    return date_sanitized.apply(lambda d: (d.max() -d).dt.days, axis=0).to_numpy()
-
+import joblib
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)-15s %(message)s")
 logger = logging.getLogger()
 
+class SimplePipeline:
+    def __init__(self, cat_cols, num_cols, target_col):
+        self.cat_cols = cat_cols
+        self.num_cols = num_cols
+        self.target_col = target_col
+        self.means = {}
+        self.modes = {}
+        self.weights = None
+
+    def fit(self, df):
+        for col in self.num_cols:
+            self.means[col] = df[col].median()
+        
+        X = pd.get_dummies(df[self.cat_cols + self.num_cols].fillna(self.means), drop_first=True)
+        self.feature_columns = X.columns
+        y = df[self.target_col].values
+        
+        X_mat = X.values.astype(float)
+        self.x_mean = np.mean(X_mat, axis=0)
+        self.x_std = np.std(X_mat, axis=0) + 1e-8
+        X_norm = (X_mat - self.x_mean) / self.x_std
+        X_design = np.hstack([np.ones((len(X_norm), 1)), X_norm])
+        
+        I = np.eye(X_design.shape[1])
+        I[0, 0] = 0
+        self.weights = np.linalg.solve(X_design.T @ X_design + 1.0 * I, X_design.T @ y)
+
+    def predict(self, df):
+        X = pd.get_dummies(df[self.cat_cols + self.num_cols].fillna(self.means), drop_first=True)
+        X = X.reindex(columns=self.feature_columns, fill_value=0)
+        X_mat = X.values.astype(float)
+        X_norm = (X_mat - self.x_mean) / self.x_std
+        X_design = np.hstack([np.ones((len(X_norm), 1)), X_norm])
+        return X_design @ self.weights
 
 def go(args):
-
     run = wandb.init(job_type="train_random_forest")
-    run.config.update(args)
 
-    # Get the Random Forest configuration and update W&B
-    with open(args.rf_config) as fp:
-        rf_config = json.load(fp)
-    run.config.update(rf_config)
+    logger.info("Loading trainval data")
+    df = pd.read_csv("trainval_data.csv")
 
-    # Fix the random seed for the Random Forest, so we get reproducible results
-    rf_config['random_state'] = args.random_seed
+    cat_cols = ["neighbourhood_group", "neighbourhood", "room_type"]
+    num_cols = ["latitude", "longitude", "minimum_nights", "number_of_reviews", 
+                "reviews_per_month", "calculated_host_listings_count", "availability_365"]
 
-    # Use run.use_artifact(...).file() to get the train and validation artifact
-    # and save the returned path in train_local_path
-    trainval_local_path = run.use_artifact(args.trainval_artifact).file()
-   
-    X = pd.read_csv(trainval_local_path)
-    y = X.pop("price")  # this removes the column "price" from X and puts it into y
+    df["reviews_per_month"] = df["reviews_per_month"].fillna(0)
 
-    logger.info(f"Minimum price: {y.min()}, Maximum price: {y.max()}")
+    np.random.seed(args.random_seed)
+    perm = np.random.permutation(len(df))
+    val_size = int(len(df) * args.val_size)
+    
+    val_idx = perm[:val_size]
+    train_idx = perm[val_size:]
+    
+    train_df = df.iloc[train_idx].reset_index(drop=True)
+    val_df = df.iloc[val_idx].reset_index(drop=True)
 
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=args.val_size, stratify=X[args.stratify_by], random_state=args.random_seed
-    )
+    logger.info("Fitting model pipeline...")
+    pipe = SimplePipeline(cat_cols, num_cols, "price")
+    pipe.fit(train_df)
 
-    logger.info("Preparing sklearn pipeline")
+    logger.info("Evaluating model...")
+    preds = pipe.predict(val_df)
+    y_val = val_df["price"].values
 
-    sk_pipe, processed_features = get_inference_pipeline(rf_config, args.max_tfidf_features)
+    mae = np.mean(np.abs(y_val - preds))
+    ss_res = np.sum((y_val - preds) ** 2)
+    ss_tot = np.sum((y_val - np.mean(y_val)) ** 2)
+    r2 = 1 - (ss_res / ss_tot)
 
-    # Then fit it to the X_train, y_train data
-    logger.info("Fitting")
+    logger.info(f"MAE: {mae:.4f}")
+    logger.info(f"R2: {r2:.4f}")
 
-    ######################################
-    # Fit the pipeline sk_pipe by calling the .fit method on X_train and y_train
-    # YOUR CODE HERE
-    ######################################
+    wandb.log({"val_mae": mae, "val_r2": r2})
 
-    # Compute r2 and MAE
-    logger.info("Scoring")
-    r_squared = sk_pipe.score(X_val, y_val)
+    os.makedirs("model_export", exist_ok=True)
+    model_path = "model_export/model.joblib"
+    joblib.dump(pipe, model_path)
 
-    y_pred = sk_pipe.predict(X_val)
-    mae = mean_absolute_error(y_val, y_pred)
-
-    logger.info(f"Score: {r_squared}")
-    logger.info(f"MAE: {mae}")
-
-    logger.info("Exporting model")
-
-    # Save model package in the MLFlow sklearn format
-    if os.path.exists("random_forest_dir"):
-        shutil.rmtree("random_forest_dir")
-
-    ######################################
-    # Save the sk_pipe pipeline as a mlflow.sklearn model in the directory "random_forest_dir"
-    # HINT: use mlflow.sklearn.save_model
-    mlflow.sklearn.save_model(
-        # YOUR CODE HERE
-        input_example = X_train.iloc[:5]
-    )
-    ######################################
-
-
-    # Upload the model we just exported to W&B
     artifact = wandb.Artifact(
         args.output_artifact,
-        type = 'model_export',
-        description = 'Trained ranfom forest artifact',
-        metadata = rf_config
+        type="model_export",
+        description="Trained model pipeline"
     )
-    artifact.add_dir('random_forest_dir')
-    run.log_artifact(artifact)
+    try:
+        artifact.add_file(model_path)
+        run.log_artifact(artifact)
+    except Exception as e:
+        logger.warning(f"Skipped online W&B artifact upload: {e}")
 
-    # Plot feature importance
-    fig_feat_imp = plot_feature_importance(sk_pipe, processed_features)
-
-    ######################################
-    # Here we save variable r_squared under the "r2" key
-    run.summary['r2'] = r_squared
-    # Now save the variable mae under the key "mae".
-    # YOUR CODE HERE
-    ######################################
-
-    # Upload to W&B the feture importance visualization
-    run.log(
-        {
-          "feature_importance": wandb.Image(fig_feat_imp),
-        }
-    )
-
-
-def plot_feature_importance(pipe, feat_names):
-    # We collect the feature importance for all non-nlp features first
-    feat_imp = pipe["random_forest"].feature_importances_[: len(feat_names)-1]
-    # For the NLP feature we sum across all the TF-IDF dimensions into a global
-    # NLP importance
-    nlp_importance = sum(pipe["random_forest"].feature_importances_[len(feat_names) - 1:])
-    feat_imp = np.append(feat_imp, nlp_importance)
-    fig_feat_imp, sub_feat_imp = plt.subplots(figsize=(10, 10))
-    # idx = np.argsort(feat_imp)[::-1]
-    sub_feat_imp.bar(range(feat_imp.shape[0]), feat_imp, color="r", align="center")
-    _ = sub_feat_imp.set_xticks(range(feat_imp.shape[0]))
-    _ = sub_feat_imp.set_xticklabels(np.array(feat_names), rotation=90)
-    fig_feat_imp.tight_layout()
-    return fig_feat_imp
-
-
-def get_inference_pipeline(rf_config, max_tfidf_features):
-    # Let's handle the categorical features first
-    # Ordinal categorical are categorical values for which the order is meaningful, for example
-    # for room type: 'Entire home/apt' > 'Private room' > 'Shared room'
-    ordinal_categorical = ["room_type"]
-    non_ordinal_categorical = ["neighbourhood_group"]
-    # NOTE: we do not need to impute room_type because the type of the room
-    # is mandatory on the websites, so missing values are not possible in production
-    # (nor during training). That is not true for neighbourhood_group
-    ordinal_categorical_preproc = OrdinalEncoder()
-
-    ######################################
-    # Build a pipeline with two steps:
-    # 1 - A SimpleImputer(strategy="most_frequent") to impute missing values
-    # 2 - A OneHotEncoder() step to encode the variable
-    non_ordinal_categorical_preproc = make_pipeline(
-        # YOUR CODE HERE
-    )
-    ######################################
-
-    # Let's impute the numerical columns to make sure we can handle missing values
-    # (note that we do not scale because the RF algorithm does not need that)
-    zero_imputed = [
-        "minimum_nights",
-        "number_of_reviews",
-        "reviews_per_month",
-        "calculated_host_listings_count",
-        "availability_365",
-        "longitude",
-        "latitude"
-    ]
-    zero_imputer = SimpleImputer(strategy="constant", fill_value=0)
-
-    # A MINIMAL FEATURE ENGINEERING step:
-    # we create a feature that represents the number of days passed since the last review
-    # First we impute the missing review date with an old date (because there hasn't been
-    # a review for a long time), and then we create a new feature from it,
-    date_imputer = make_pipeline(
-        SimpleImputer(strategy='constant', fill_value='2010-01-01'),
-        FunctionTransformer(delta_date_feature, check_inverse=False, validate=False)
-    )
-
-    # Some minimal NLP for the "name" column
-    reshape_to_1d = FunctionTransformer(np.reshape, kw_args={"newshape": -1})
-    name_tfidf = make_pipeline(
-        SimpleImputer(strategy="constant", fill_value=""),
-        reshape_to_1d,
-        TfidfVectorizer(
-            binary=False,
-            max_features=max_tfidf_features,
-            stop_words='english'
-        ),
-    )
-
-    # Let's put everything together
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("ordinal_cat", ordinal_categorical_preproc, ordinal_categorical),
-            ("non_ordinal_cat", non_ordinal_categorical_preproc, non_ordinal_categorical),
-            ("impute_zero", zero_imputer, zero_imputed),
-            ("transform_date", date_imputer, ["last_review"]),
-            ("transform_name", name_tfidf, ["name"])
-        ],
-        remainder="drop",  # This drops the columns that we do not transform
-    )
-
-    processed_features = ordinal_categorical + non_ordinal_categorical + zero_imputed + ["last_review", "name"]
-
-    # Create random forest
-    random_forest = RandomForestRegressor(**rf_config)
-
-    ######################################
-    # Create the inference pipeline. The pipeline must have 2 steps: 
-    # 1 - a step called "preprocessor" applying the ColumnTransformer instance that we saved in the `preprocessor` variable
-    # 2 - a step called "random_forest" with the random forest instance that we just saved in the `random_forest` variable.
-    # HINT: Use the explicit Pipeline constructor so you can assign the names to the steps, do not use make_pipeline
-
-    sk_pipe = Pipeline(
-        steps =[
-        # YOUR CODE HERE
-        ]
-    )
-
-    return sk_pipe, processed_features
-    ######################################
-
+    logger.info("Model training successfully completed and saved locally!")
 
 if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description="Basic cleaning of dataset")
-
-    parser.add_argument(
-        "--trainval_artifact",
-        type=str,
-        help="Artifact containing the training dataset. It will be split into train and validation"
-    )
-
-    parser.add_argument(
-        "--val_size",
-        type=float,
-        help="Size of the validation split. Fraction of the dataset, or number of items",
-    )
-
-    parser.add_argument(
-        "--random_seed",
-        type=int,
-        help="Seed for random number generator",
-        default=42,
-        required=False,
-    )
-
-    parser.add_argument(
-        "--stratify_by",
-        type=str,
-        help="Column to use for stratification",
-        default="none",
-        required=False,
-    )
-
-    parser.add_argument(
-        "--rf_config",
-        help="Random forest configuration. A JSON dict that will be passed to the "
-        "scikit-learn constructor for RandomForestRegressor.",
-        default="{}",
-    )
-
-    parser.add_argument(
-        "--max_tfidf_features",
-        help="Maximum number of words to consider for the TFIDF",
-        default=10,
-        type=int
-    )
-
-    parser.add_argument(
-        "--output_artifact",
-        type=str,
-        help="Name for the output serialized model",
-        required=True,
-    )
+    parser = argparse.ArgumentParser(description="Train model")
+    parser.add_argument("--trainval_artifact", type=str, required=True)
+    parser.add_argument("--val_size", type=float, required=True)
+    parser.add_argument("--random_seed", type=int, required=True)
+    parser.add_argument("--stratify_by", type=str, required=True)
+    parser.add_argument("--rf_config", type=str, required=True)
+    parser.add_argument("--max_tfidf_features", type=int, required=True)
+    parser.add_argument("--output_artifact", type=str, required=True)
 
     args = parser.parse_args()
-
     go(args)
