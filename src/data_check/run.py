@@ -1,31 +1,31 @@
-﻿import argparse
-import logging
+﻿import logging
 import pytest
-import pandas as pd
+import sys
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)-15s %(message)s")
-logger = logging.getLogger()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)-15s %(message)s"
+)
+
+logger = logging.getLogger(__name__)
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Test data quality")
-    parser.add_argument("--csv", type=str, required=True)
-    parser.add_argument("--ref", type=str, required=True)
-    parser.add_argument("--kl_threshold", type=float, required=True)
-    parser.add_argument("--min_price", type=float, required=True)
-    parser.add_argument("--max_price", type=float, required=True)
 
-    args = parser.parse_args()
+    logger.info("Starting data quality checks")
 
-    # Load local cleaned sample
-    data = pd.read_csv("clean_sample.csv")
-    ref_data = pd.read_csv("clean_sample.csv")
+    result = pytest.main([
+        "-vv",
+        "-s",
+        "test_data.py",
+        *sys.argv[1:],
+    ])
 
-    pytest.data = data
-    pytest.ref_data = ref_data
-    pytest.kl_threshold = args.kl_threshold
-    pytest.min_price = args.min_price
-    pytest.max_price = args.max_price
+    if result != pytest.ExitCode.OK:
+        raise RuntimeError(
+            f"Data quality checks failed. "
+            f"Pytest exit code: {result}"
+        )
 
-    res = pytest.main(["-s", "src/data_check/test_data.py"])
-    if res != 0:
-        raise ValueError("Data check failed")
+    logger.info("All data quality checks passed")

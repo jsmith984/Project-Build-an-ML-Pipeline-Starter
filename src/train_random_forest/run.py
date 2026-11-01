@@ -1,116 +1,269 @@
-﻿import argparse
+#!/usr/bin/env python
+
+import argparse
+import json
 import logging
 import os
-import json
-import pandas as pd
-import numpy as np
-import wandb
+
 import joblib
+import numpy as np
+import pandas as pd
+import wandb
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)-15s %(message)s")
-logger = logging.getLogger()
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+)
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
 
-class SimplePipeline:
-    def __init__(self, cat_cols, num_cols, target_col):
-        self.cat_cols = cat_cols
-        self.num_cols = num_cols
-        self.target_col = target_col
-        self.means = {}
-        self.modes = {}
-        self.weights = None
+from feature_engineering import (
+    build_preprocessor,
+    prepare_features,
+)
 
-    def fit(self, df):
-        for col in self.num_cols:
-            self.means[col] = df[col].median()
-        
-        X = pd.get_dummies(df[self.cat_cols + self.num_cols].fillna(self.means), drop_first=True)
-        self.feature_columns = X.columns
-        y = df[self.target_col].values
-        
-        X_mat = X.values.astype(float)
-        self.x_mean = np.mean(X_mat, axis=0)
-        self.x_std = np.std(X_mat, axis=0) + 1e-8
-        X_norm = (X_mat - self.x_mean) / self.x_std
-        X_design = np.hstack([np.ones((len(X_norm), 1)), X_norm])
-        
-        I = np.eye(X_design.shape[1])
-        I[0, 0] = 0
-        self.weights = np.linalg.solve(X_design.T @ X_design + 1.0 * I, X_design.T @ y)
 
-    def predict(self, df):
-        X = pd.get_dummies(df[self.cat_cols + self.num_cols].fillna(self.means), drop_first=True)
-        X = X.reindex(columns=self.feature_columns, fill_value=0)
-        X_mat = X.values.astype(float)
-        X_norm = (X_mat - self.x_mean) / self.x_std
-        X_design = np.hstack([np.ones((len(X_norm), 1)), X_norm])
-        return X_design @ self.weights
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)-15s %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+
+PROJECT = "nyc_airbnb"
+ENTITY = "jsm394-western-governors-university"
+
+
+def find_file(directory, extension):
+    """Find exactly one file with the specified extension."""
+
+    files = []
+
+    for root, _, filenames in os.walk(directory):
+        for filename in filenames:
+            if filename.endswith(extension):
+                files.append(os.path.join(root, filename))
+
+    if len(files) != 1:
+        raise ValueError(
+            f"Expected exactly one {extension} file, found {files}"
+        )
+
+    return files[0]
+
 
 def go(args):
-    run = wandb.init(job_type="train_random_forest")
 
-    logger.info("Loading trainval data")
-    df = pd.read_csv("trainval_data.csv")
-
-    cat_cols = ["neighbourhood_group", "neighbourhood", "room_type"]
-    num_cols = ["latitude", "longitude", "minimum_nights", "number_of_reviews", 
-                "reviews_per_month", "calculated_host_listings_count", "availability_365"]
-
-    df["reviews_per_month"] = df["reviews_per_month"].fillna(0)
-
-    np.random.seed(args.random_seed)
-    perm = np.random.permutation(len(df))
-    val_size = int(len(df) * args.val_size)
-    
-    val_idx = perm[:val_size]
-    train_idx = perm[val_size:]
-    
-    train_df = df.iloc[train_idx].reset_index(drop=True)
-    val_df = df.iloc[val_idx].reset_index(drop=True)
-
-    logger.info("Fitting model pipeline...")
-    pipe = SimplePipeline(cat_cols, num_cols, "price")
-    pipe.fit(train_df)
-
-    logger.info("Evaluating model...")
-    preds = pipe.predict(val_df)
-    y_val = val_df["price"].values
-
-    mae = np.mean(np.abs(y_val - preds))
-    ss_res = np.sum((y_val - preds) ** 2)
-    ss_tot = np.sum((y_val - np.mean(y_val)) ** 2)
-    r2 = 1 - (ss_res / ss_tot)
-
-    logger.info(f"MAE: {mae:.4f}")
-    logger.info(f"R2: {r2:.4f}")
-
-    wandb.log({"val_mae": mae, "val_r2": r2})
-
-    os.makedirs("model_export", exist_ok=True)
-    model_path = "model_export/model.joblib"
-    joblib.dump(pipe, model_path)
-
-    artifact = wandb.Artifact(
-        args.output_artifact,
-        type="model_export",
-        description="Trained model pipeline"
+    run = wandb.init(
+        project=PROJECT,
+        entity=ENTITY,
+        job_type="train_random_forest",
     )
-    try:
-        artifact.add_file(model_path)
-        run.log_artifact(artifact)
-    except Exception as e:
-        logger.warning(f"Skipped online W&B artifact upload: {e}")
 
-    logger.info("Model training successfully completed and saved locally!")
+    try:
+
+        run.config.update(vars(args))
+
+        # Download training artifact.
+        logger.info(
+            "Downloading training artifact: %s",
+            args.trainval_artifact,
+        )
+
+        artifact = run.use_artifact(args.trainval_artifact)
+        artifact_dir = artifact.download()
+
+        csv_file = find_file(artifact_dir, ".csv")
+
+        df = pd.read_csv(csv_file)
+
+        logger.info("Dataset dimensions: %s", df.shape)
+
+        # Prepare features and target.
+        X, y = prepare_features(df)
+
+        valid_rows = y.notna() & np.isfinite(y)
+
+        X = X.loc[valid_rows].copy()
+        y = y.loc[valid_rows].copy()
+
+        if len(X) < 2:
+            raise ValueError("Not enough valid rows to train.")
+
+        # Split into training and validation sets.
+        stratify = None
+
+        if args.stratify_by.lower() != "none":
+            if args.stratify_by not in df.columns:
+                raise ValueError(
+                    f"Stratification column '{args.stratify_by}' "
+                    "does not exist."
+                )
+
+            stratify = df.loc[valid_rows, args.stratify_by]
+
+            if stratify.isna().any():
+                raise ValueError(
+                    "Stratification column contains missing values."
+                )
+
+            if stratify.value_counts().min() < 2:
+                raise ValueError(
+                    "Every stratification group needs at least "
+                    "two observations."
+                )
+
+        X_train, X_val, y_train, y_val = train_test_split(
+            X,
+            y,
+            test_size=float(args.val_size),
+            random_state=int(args.random_seed),
+            stratify=stratify,
+        )
+
+        logger.info("Training dimensions: %s", X_train.shape)
+        logger.info("Validation dimensions: %s", X_val.shape)
+
+        # Load Random Forest parameters.
+        with open(args.rf_config, "r") as fp:
+            rf_config = json.load(fp)
+
+        logger.info("Random Forest configuration: %s", rf_config)
+
+        # Build preprocessing pipeline.
+        preprocessor = build_preprocessor(
+            X_train.assign(price=y_train),
+            max_tfidf_features=int(args.max_tfidf_features),
+        )
+
+        # Initialize model.
+        rf_model = RandomForestRegressor(
+            **rf_config
+        )
+
+        # Combine preprocessing and model.
+        model = Pipeline(
+            steps=[
+                ("preprocessor", preprocessor),
+                ("regressor", rf_model),
+            ]
+        )
+
+        # Train model.
+        logger.info("Training Random Forest model.")
+
+        model.fit(X_train, y_train)
+
+        # Validation predictions.
+        predictions = model.predict(X_val)
+
+        # Calculate metrics.
+        rmse = np.sqrt(
+            mean_squared_error(y_val, predictions)
+        )
+
+        mae = mean_absolute_error(
+            y_val,
+            predictions,
+        )
+
+        r2 = r2_score(
+            y_val,
+            predictions,
+        )
+
+        logger.info("Validation RMSE: %.4f", rmse)
+        logger.info("Validation MAE: %.4f", mae)
+        logger.info("Validation R2: %.4f", r2)
+
+        # Log metrics to W&B.
+        run.log(
+            {
+                "validation_rmse": float(rmse),
+                "validation_mae": float(mae),
+                "validation_r2": float(r2),
+            }
+        )
+
+        # Export model.
+        output_dir = "model_export"
+        os.makedirs(output_dir, exist_ok=True)
+
+        model_file = os.path.join(
+            output_dir,
+            "model.joblib",
+        )
+
+        joblib.dump(model, model_file)
+
+        logger.info("Saved model: %s", model_file)
+
+        # Register model artifact.
+        model_artifact = wandb.Artifact(
+            name=args.output_artifact,
+            type="model",
+            description="NYC Airbnb Random Forest regression model",
+        )
+
+        model_artifact.add_file(model_file)
+
+        run.log_artifact(
+            model_artifact,
+            aliases=["latest", "prod"],
+        )
+
+        logger.info("Model registered successfully.")
+
+    finally:
+        run.finish()
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train model")
-    parser.add_argument("--trainval_artifact", type=str, required=True)
-    parser.add_argument("--val_size", type=float, required=True)
-    parser.add_argument("--random_seed", type=int, required=True)
-    parser.add_argument("--stratify_by", type=str, required=True)
-    parser.add_argument("--rf_config", type=str, required=True)
-    parser.add_argument("--max_tfidf_features", type=int, required=True)
-    parser.add_argument("--output_artifact", type=str, required=True)
 
-    args = parser.parse_args()
-    go(args)
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--trainval_artifact",
+        type=str,
+        required=True,
+    )
+
+    parser.add_argument(
+        "--val_size",
+        type=float,
+        required=True,
+    )
+
+    parser.add_argument(
+        "--random_seed",
+        type=int,
+        default=42,
+    )
+
+    parser.add_argument(
+        "--stratify_by",
+        type=str,
+        default="none",
+    )
+
+    parser.add_argument(
+        "--rf_config",
+        type=str,
+        required=True,
+    )
+
+    parser.add_argument(
+        "--max_tfidf_features",
+        type=int,
+        required=True,
+    )
+
+    parser.add_argument(
+        "--output_artifact",
+        type=str,
+        required=True,
+    )
+
+    go(parser.parse_args())

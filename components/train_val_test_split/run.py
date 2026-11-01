@@ -1,64 +1,157 @@
-﻿import argparse
-import logging
-import pandas as pd
-import numpy as np
-import wandb
+#!/usr/bin/env python
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)-15s %(message)s")
-logger = logging.getLogger()
+import argparse
+import logging
+import os
+import sys
+
+import pandas as pd
+import wandb
+from sklearn.model_selection import train_test_split
+
+# Make the shared W&B utilities available.
+sys.path.insert(
+    0,
+    os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+)
+
+from wandb_utils.log_artifact import log_artifact
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)-15s %(message)s"
+)
+
+logger = logging.getLogger(__name__)
+
+PROJECT = "nyc_airbnb"
+ENTITY = "jsm394-western-governors-university"
+
 
 def go(args):
-    run = wandb.init(job_type="split_data")
-    
-    logger.info("Reading clean_sample.csv")
-    df = pd.read_csv("clean_sample.csv")
 
-    logger.info("Splitting data into trainval and test sets")
-    
-    # Stratified split using pandas and numpy
-    if args.stratify_by != "none" and args.stratify_by in df.columns:
-        train_list, test_list = [], []
-        for _, group in df.groupby(args.stratify_by):
-            shuffled = group.sample(frac=1.0, random_state=args.random_seed)
-            n_test = int(len(group) * args.test_size)
-            test_list.append(shuffled.iloc[:n_test])
-            train_list.append(shuffled.iloc[n_test:])
-        test = pd.concat(test_list).sample(frac=1.0, random_state=args.random_seed).reset_index(drop=True)
-        trainval = pd.concat(train_list).sample(frac=1.0, random_state=args.random_seed).reset_index(drop=True)
-    else:
-        shuffled = df.sample(frac=1.0, random_state=args.random_seed).reset_index(drop=True)
-        n_test = int(len(df) * args.test_size)
-        test = shuffled.iloc[:n_test]
-        trainval = shuffled.iloc[n_test:]
-
-    trainval.to_csv("trainval_data.csv", index=False)
-    test.to_csv("test_data.csv", index=False)
-
-    logger.info("Uploading trainval_data.csv dataset")
-    artifact = wandb.Artifact(
-        "trainval_data.csv",
-        type="trainval_data",
-        description="Train/val dataset"
+    run = wandb.init(
+        project=PROJECT,
+        entity=ENTITY,
+        job_type="train_val_test_split"
     )
-    artifact.add_file("trainval_data.csv")
-    run.log_artifact(artifact)
 
-    logger.info("Uploading test_data.csv dataset")
-    artifact = wandb.Artifact(
-        "test_data.csv",
-        type="test_data",
-        description="Test dataset"
-    )
-    artifact.add_file("test_data.csv")
-    run.log_artifact(artifact)
+    try:
+        run.config.update(vars(args))
+
+        # Download the cleaned dataset.
+        logger.info("Downloading artifact: %s", args.input)
+
+        artifact = run.use_artifact(args.input)
+        artifact_dir = artifact.download()
+
+        csv_files = [
+            os.path.join(root, filename)
+            for root, _, files in os.walk(artifact_dir)
+            for filename in files
+            if filename.lower().endswith(".csv")
+        ]
+
+        if len(csv_files) != 1:
+            raise ValueError(
+                f"Expected exactly one CSV file, found {csv_files}"
+            )
+
+        df = pd.read_csv(csv_files[0])
+
+        logger.info("Loaded dataset with shape: %s", df.shape)
+
+        if len(df) < 2:
+            raise ValueError("Dataset must contain at least two rows.")
+
+        # Determine whether stratification is enabled.
+        stratify = None
+
+        if args.stratify_by.lower() != "none":
+            if args.stratify_by not in df.columns:
+                raise ValueError(
+                    f"Stratification column '{args.stratify_by}' "
+                    "does not exist."
+                )
+
+            stratify = df[args.stratify_by]
+
+            if stratify.isna().any():
+                raise ValueError(
+                    "Stratification column contains missing values."
+                )
+
+            if stratify.value_counts().min() < 2:
+                raise ValueError(
+                    "Every stratification group must have at least "
+                    "two observations."
+                )
+
+        # Split into train/validation and test.
+        trainval, test = train_test_split(
+            df,
+            test_size=float(args.test_size),
+            random_state=int(args.random_seed),
+            stratify=stratify
+        )
+
+        logger.info("Train/validation dimensions: %s", trainval.shape)
+        logger.info("Test dimensions: %s", test.shape)
+
+        # Export datasets.
+        trainval_file = "trainval_data.csv"
+        test_file = "test_data.csv"
+
+        trainval.to_csv(trainval_file, index=False)
+        test.to_csv(test_file, index=False)
+
+        # Register train/validation artifact.
+        log_artifact(
+            "trainval_data.csv",
+            "trainval_data",
+            "Training and validation dataset",
+            trainval_file,
+            run
+        )
+
+        # Register held-out test artifact.
+        log_artifact(
+            "test_data.csv",
+            "test_data",
+            "Held-out test dataset",
+            test_file,
+            run
+        )
+
+        logger.info("Data splitting completed successfully.")
+
+    finally:
+        run.finish()
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Split dataset")
-    parser.add_argument("--base_csv", type=str, required=True)
-    parser.add_argument("--target", type=str, required=True)
-    parser.add_argument("--test_size", type=float, required=True)
-    parser.add_argument("--random_seed", type=int, required=True)
-    parser.add_argument("--stratify_by", type=str, required=True)
+
+    parser = argparse.ArgumentParser(
+        description="Split Airbnb data into train/validation and test sets."
+    )
+
+    parser.add_argument("input", type=str)
+
+    parser.add_argument("test_size", type=float)
+
+    parser.add_argument(
+        "--random_seed",
+        type=int,
+        default=42
+    )
+
+    parser.add_argument(
+        "--stratify_by",
+        type=str,
+        default="none"
+    )
 
     args = parser.parse_args()
+
     go(args)
