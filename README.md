@@ -1,6 +1,6 @@
 NYC Airbnb Project
 Project Links
-Weights & Biases Project: https://forge.coreweave.com/wandb/jsm394-western-governors-university/nyc_airbnb?nw=nwuserjsm394
+Weights & Biases Project: https://forge.coreweave.com/wandb/jsm394-western-governors-university/nyc_airbnb/reports/NYC-AirBnB-Reports--VmlldzoxODIzODI1NA?accessToken=psc3hv0a9qhi6sso85v08wv9ydtmal0fx012xgaudifptngtgck42wk2buvwdna0
 GitHub Repository: https://github.com/jsmith984/Project-Build-an-ML-Pipeline-Starter
 Project Overview
 
