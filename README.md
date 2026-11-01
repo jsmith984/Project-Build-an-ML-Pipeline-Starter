@@ -1,6 +1,12 @@
-## Project Links
-- **GitHub Repository**: https://github.com/jsmith984/Project-Build-an-ML-Pipeline-Starter
-- **W&B Project**: https://wandb.ai/jsmith984/nyc_airbnb
+NYC Airbnb Project
+Project Links
+Weights & Biases Project: https://forge.coreweave.com/wandb/jsm394-western-governors-university/nyc_airbnb?nw=nwuserjsm394
+GitHub Repository: https://github.com/jsmith984/Project-Build-an-ML-Pipeline-Starter
+Project Overview
+
+Build an ML Pipeline for Short-Term Rental Prices in NYC.
+
+This project develops a reusable end-to-end machine learning pipeline to estimate short-term rental prices for NYC Airbnb properties. The pipeline processes incoming data, performs data validation and cleaning, trains a Random Forest model, and evaluates model performance.
 
 # Build an ML Pipeline for Short-Term Rental Prices in NYC
 You are working for a property management company renting rooms and properties for short periods of 
