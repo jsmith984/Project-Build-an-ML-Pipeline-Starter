@@ -6,6 +6,7 @@ import logging
 import os
 import shutil
 
+import mlflow
 import mlflow.sklearn
 import numpy as np
 import pandas as pd
@@ -27,6 +28,10 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from feature_engineering import prepare_features
 
 
+# --------------------------------------------------
+# LOGGING CONFIGURATION
+# --------------------------------------------------
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)-15s %(message)s",
@@ -37,6 +42,10 @@ logger = logging.getLogger(__name__)
 PROJECT = "nyc_airbnb"
 ENTITY = "jsm394-western-governors-university"
 
+
+# --------------------------------------------------
+# FIND FILE
+# --------------------------------------------------
 
 def find_file(directory, extension):
 
@@ -59,9 +68,12 @@ def find_file(directory, extension):
 # INFERENCE PIPELINE
 # --------------------------------------------------
 
-def get_inference_pipeline(rf_config, max_tfidf_features):
+def get_inference_pipeline(
+    rf_config,
+    max_tfidf_features,
+    random_seed,
+):
 
-    # Numerical preprocessing.
     numerical_preproc = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
@@ -69,8 +81,7 @@ def get_inference_pipeline(rf_config, max_tfidf_features):
         ]
     )
 
-    # Non-ordinal categorical preprocessing.
-    non_ordinal_categorical_preproc = Pipeline(
+    categorical_preproc = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
             (
@@ -80,7 +91,6 @@ def get_inference_pipeline(rf_config, max_tfidf_features):
         ]
     )
 
-    # Complete preprocessing.
     preprocessor = ColumnTransformer(
         transformers=[
             (
@@ -98,7 +108,7 @@ def get_inference_pipeline(rf_config, max_tfidf_features):
             ),
             (
                 "categorical",
-                non_ordinal_categorical_preproc,
+                categorical_preproc,
                 [
                     "neighbourhood_group",
                     "neighbourhood",
@@ -119,13 +129,30 @@ def get_inference_pipeline(rf_config, max_tfidf_features):
         remainder="drop",
     )
 
-    # Complete sklearn inference pipeline.
+    # Copy configuration to avoid modifying
+    # the original dictionary.
+
+    rf_params = dict(rf_config)
+
+    # Always use the pipeline's configured seed.
+    # Remove any existing random_state to avoid
+    # duplicate keyword arguments.
+
+    rf_params.pop("random_state", None)
+
+    rf_params["random_state"] = int(random_seed)
+
+    logger.info(
+        "Effective Random Forest configuration: %s",
+        rf_params,
+    )
+
     sk_pipe = Pipeline(
         steps=[
             ("preprocessor", preprocessor),
             (
                 "random_forest",
-                RandomForestRegressor(**rf_config),
+                RandomForestRegressor(**rf_params),
             ),
         ]
     )
@@ -147,9 +174,15 @@ def go(args):
 
     try:
 
-        run.config.update(vars(args))
+        run.config.update(
+            vars(args),
+            allow_val_change=True,
+        )
 
-        # Download training data.
+        # ------------------------------------------
+        # DOWNLOAD TRAINING DATA
+        # ------------------------------------------
+
         logger.info("Downloading training artifact.")
 
         artifact = run.use_artifact(
@@ -165,9 +198,15 @@ def go(args):
 
         df = pd.read_csv(csv_file)
 
-        logger.info("Dataset dimensions: %s", df.shape)
+        logger.info(
+            "Dataset dimensions: %s",
+            df.shape,
+        )
 
-        # Prepare features and target.
+        # ------------------------------------------
+        # PREPARE FEATURES AND TARGET
+        # ------------------------------------------
+
         X, y = prepare_features(df)
 
         valid_rows = (
@@ -179,9 +218,14 @@ def go(args):
         y = y.loc[valid_rows].copy()
 
         if len(X) < 2:
-            raise ValueError("Not enough valid rows to train.")
+            raise ValueError(
+                "Not enough valid observations to train."
+            )
 
-        # Stratification.
+        # ------------------------------------------
+        # STRATIFICATION
+        # ------------------------------------------
+
         stratify = None
 
         if args.stratify_by.lower() != "none":
@@ -193,7 +237,7 @@ def go(args):
                 )
 
             stratify = df.loc[
-                valid_rows,
+                X.index,
                 args.stratify_by,
             ]
 
@@ -204,11 +248,14 @@ def go(args):
 
             if stratify.value_counts().min() < 2:
                 raise ValueError(
-                    "Every stratification group needs at least "
-                    "two observations."
+                    "Every stratification group needs "
+                    "at least two observations."
                 )
 
-        # Training and validation split.
+        # ------------------------------------------
+        # TRAIN / VALIDATION SPLIT
+        # ------------------------------------------
+
         X_train, X_val, y_train, y_val = train_test_split(
             X,
             y,
@@ -217,22 +264,60 @@ def go(args):
             stratify=stratify,
         )
 
-        logger.info("Training dimensions: %s", X_train.shape)
-        logger.info("Validation dimensions: %s", X_val.shape)
+        logger.info(
+            "Training dimensions: %s",
+            X_train.shape,
+        )
 
-        # Load Random Forest configuration.
+        logger.info(
+            "Validation dimensions: %s",
+            X_val.shape,
+        )
+
+        # ------------------------------------------
+        # LOAD RANDOM FOREST CONFIGURATION
+        # ------------------------------------------
+
         with open(args.rf_config, "r") as fp:
             rf_config = json.load(fp)
 
-        logger.info("Random Forest configuration: %s", rf_config)
+        if not isinstance(rf_config, dict):
+            raise ValueError(
+                "Random Forest configuration must be a JSON object."
+            )
 
-        # Build the inference pipeline.
+        # Create effective configuration for tracking.
+
+        effective_rf_config = dict(rf_config)
+
+        effective_rf_config["random_state"] = int(
+            args.random_seed
+        )
+
+        logger.info(
+            "Random Forest configuration: %s",
+            effective_rf_config,
+        )
+
+        run.config.update(
+            effective_rf_config,
+            allow_val_change=True,
+        )
+
+        # ------------------------------------------
+        # BUILD MODEL PIPELINE
+        # ------------------------------------------
+
         sk_pipe = get_inference_pipeline(
             rf_config,
             args.max_tfidf_features,
+            args.random_seed,
         )
 
-        # Fit the complete pipeline.
+        # ------------------------------------------
+        # TRAIN MODEL
+        # ------------------------------------------
+
         logger.info("Training Random Forest model.")
 
         sk_pipe.fit(
@@ -240,12 +325,21 @@ def go(args):
             y_train,
         )
 
-        # Validation predictions.
+        # ------------------------------------------
+        # VALIDATION PREDICTIONS
+        # ------------------------------------------
+
         predictions = sk_pipe.predict(X_val)
 
-        # Calculate regression metrics.
+        # ------------------------------------------
+        # EVALUATION METRICS
+        # ------------------------------------------
+
         rmse = np.sqrt(
-            mean_squared_error(y_val, predictions)
+            mean_squared_error(
+                y_val,
+                predictions,
+            )
         )
 
         mae = mean_absolute_error(
@@ -258,11 +352,25 @@ def go(args):
             predictions,
         )
 
-        logger.info("Validation RMSE: %.4f", rmse)
-        logger.info("Validation MAE: %.4f", mae)
-        logger.info("Validation R2: %.4f", r2)
+        logger.info(
+            "Validation RMSE: %.4f",
+            rmse,
+        )
 
-        # Log MAE and other metrics to W&B.
+        logger.info(
+            "Validation MAE: %.4f",
+            mae,
+        )
+
+        logger.info(
+            "Validation R2: %.4f",
+            r2,
+        )
+
+        # ------------------------------------------
+        # LOG METRICS TO WANDB
+        # ------------------------------------------
+
         run.log(
             {
                 "MAE": float(mae),
@@ -272,29 +380,63 @@ def go(args):
             }
         )
 
-        # --------------------------------------------------
+        # ------------------------------------------
         # EXPORT MODEL USING MLFLOW
-        # --------------------------------------------------
+        # ------------------------------------------
 
         export_path = "model_export"
 
         if os.path.exists(export_path):
             shutil.rmtree(export_path)
 
-        logger.info("Exporting model using MLflow.")
+        logger.info(
+            "Exporting model using MLflow."
+        )
+
+        # Prepare input example.
+
+        input_example = X_train.head(5).copy()
+
+        # Convert integer columns to float64
+        # to support possible missing values.
+
+        for column in input_example.select_dtypes(
+            include=["integer"]
+        ).columns:
+
+            input_example[column] = (
+                input_example[column].astype("float64")
+            )
+
+        # Generate predictions for signature.
+
+        signature_predictions = sk_pipe.predict(
+            input_example
+        )
+
+        # Infer MLflow model signature.
+
+        signature = mlflow.models.infer_signature(
+            input_example,
+            signature_predictions,
+        )
+
+        # Export complete sklearn pipeline.
 
         mlflow.sklearn.save_model(
             sk_pipe,
             export_path,
+            input_example=input_example,
+            signature=signature,
         )
 
         logger.info(
             "MLflow model exported successfully."
         )
 
-        # --------------------------------------------------
-        # REGISTER MODEL ARTIFACT IN W&B
-        # --------------------------------------------------
+        # ------------------------------------------
+        # REGISTER MODEL ARTIFACT IN WANDB
+        # ------------------------------------------
 
         model_artifact = wandb.Artifact(
             name=args.output_artifact,
@@ -305,20 +447,21 @@ def go(args):
             ),
         )
 
-        model_artifact.add_dir(export_path)
-
-        # Only latest is automatic.
-        # The prod alias will be applied manually
-        # to the best-performing model after the sweep.
+        model_artifact.add_dir(
+            export_path
+        )
 
         run.log_artifact(
             model_artifact,
             aliases=["latest"],
         )
 
-        logger.info("Model registered successfully.")
+        logger.info(
+            "Model registered successfully."
+        )
 
     finally:
+
         run.finish()
 
 
