@@ -3,17 +3,17 @@ Project Overview
 
 This project implements a reusable, end-to-end machine learning pipeline to predict nightly Airbnb listing prices in New York City using a Random Forest regression model.
 
-The project is based on the Udacity Build an ML Pipeline for Short-Term Rental Prices in NYC starter project.
+The project is based on Udacity's Build an ML Pipeline for Short-Term Rental Prices in NYC starter project.
 
 The business scenario involves a property management company that receives new rental listing data regularly and needs a repeatable process for acquiring, cleaning, validating, processing, and evaluating data before training machine learning models.
 
-The pipeline automates the complete machine learning workflow, from raw data acquisition through model training and final evaluation.
+The pipeline automates the machine learning workflow, from raw data acquisition through model training and final evaluation.
 
 The project integrates MLflow Projects for pipeline orchestration, Hydra for configuration management, Scikit-learn for machine learning, and Weights & Biases (W&B) for experiment tracking and artifact management.
 
 Project Links
 GitHub Repository: https://github.com/jsmith984/Project-Build-an-ML-Pipeline-Starter
-Weights & Biases Project: https://wandb.ai/jsm394-western-governors-university/nyc_airbnb
+Weights & Biases Project Dashboard: https://wandb.ai/jsm394-western-governors-university/nyc_airbnb
 Weights & Biases Reports: https://forge.coreweave.com/wandb/jsm394-western-governors-university/nyc_airbnb/reports/NYC-AirBnB-Reports--VmlldzoxODIzODI1NA
 Original Udacity Repository: https://github.com/udacity/build-ml-pipeline-for-short-term-rental-prices
 Technologies Used
@@ -50,9 +50,6 @@ Export the trained model using MLflow.
 Evaluate the model using previously unseen test observations.
 Log evaluation metrics and register prediction artifacts in Weights & Biases.
 Repository Structure
-
-The repository contains the following important directories and files:
-
 text
 Project-Build-an-ML-Pipeline-Starter/
 │
@@ -92,7 +89,6 @@ Weights & Biases account
 1. Clone the Repository
 bash
 git clone https://github.com/jsmith984/Project-Build-an-ML-Pipeline-Starter.git
-
 cd Project-Build-an-ML-Pipeline-Starter
 
 2. Create the Conda Environment
@@ -133,7 +129,7 @@ Weights & Biases is used to track pipeline experiments, store datasets, register
 
 Running the Machine Learning Pipeline
 
-All commands should be executed from the repository's root directory with the nyc_airbnb_dev Conda environment activated.
+All commands should be executed from the repository root directory with the nyc_airbnb_dev Conda environment activated.
 
 Execute the Complete Pipeline
 bash
@@ -146,7 +142,7 @@ Execute Individual Pipeline Components
 
 Individual components can also be executed through the main pipeline configuration when their required upstream artifacts are available.
 
-For example, model training:
+Model training:
 
 bash
 python main.py main.steps=train_random_forest
@@ -174,6 +170,8 @@ Final cleaned dataset	46,427
 
 Approximately 94.95% of the original observations were retained after cleaning.
 
+The one-record difference between the intermediate and final cleaned datasets reflects an additional processing or cleaning step.
+
 Data Validation
 
 The data validation component executed seven automated tests.
@@ -186,11 +184,11 @@ Unique listing IDs.
 Missing neighborhood validation.
 Neighborhood distribution consistency.
 Dataset row count validation.
-Remaining configured validation checks.
+Additional configured validation requirements.
 
-Validation Result: 7 tests passed.
+Validation result: 7 of 7 tests passed.
 
-Nine deprecation warnings appeared during execution. These warnings originated from the Weights & Biases integration and did not cause test failures.
+Nine deprecation warnings appeared during execution. These warnings originated from the Weights & Biases integration and did not prevent successful execution.
 
 Dataset Splitting
 
@@ -219,8 +217,6 @@ Random Forest Model Configuration
 
 The final model uses Scikit-learn's Random Forest Regressor.
 
-The following configuration was used:
-
 Parameter	Value
 n_estimators	100
 max_depth	15
@@ -232,9 +228,7 @@ random_state	42
 oob_score	True
 n_jobs	-1
 
-The model was trained successfully using the training dataset.
-
-Validation performance was calculated before exporting the model.
+The model was trained successfully using the training dataset. Validation performance was calculated before exporting the model.
 
 Validation Results
 Metric	Result
@@ -252,7 +246,7 @@ Loaded the exported MLflow model.
 Downloaded the held-out test dataset.
 Validated the required test columns.
 Prepared the test features.
-Generated the test predictions.
+Generated price predictions.
 Calculated regression evaluation metrics.
 Logged the results to Weights & Biases.
 Saved the test predictions.
@@ -262,7 +256,7 @@ Metric	Result
 RMSE	47.9119
 MAE	33.6050
 R²	0.5743
-Test Observations	9,286
+Test observations	9,286
 Validation Versus Test Performance
 Metric	Validation	Test
 RMSE	46.1633	47.9119
@@ -282,9 +276,10 @@ The results demonstrate a functioning machine learning pipeline, although there 
 
 Test Predictions
 
-The evaluation component generated a CSV file containing the actual prices, predicted prices, and prediction errors.
+The evaluation component generated a CSV file containing actual prices, predicted prices, and prediction errors.
 
-Output File
+Output file:
+
 text
 src/test_regression_model/test_predictions.csv
 
@@ -306,8 +301,7 @@ Weights & Biases Integration
 
 Weights & Biases was successfully integrated throughout the machine learning pipeline.
 
-The following artifacts were registered and verified:
-
+Registered and Verified Artifacts
 Artifact	Type	Verification
 sample.csv	raw_data	Verified
 clean_data.csv	clean_data	Verified
@@ -355,6 +349,8 @@ python main.py main.steps=all
 
 This provides a repeatable workflow for acquiring new data, validating records, training a model, and evaluating its performance.
 
+The pipeline supports repeatable execution. Scheduled automatic retraining has not been implemented or verified.
+
 Final Pipeline Verification
 
 The complete machine learning pipeline was successfully executed on November 2, 2026.
@@ -385,9 +381,16 @@ The final test predictions were generated.
 The prediction artifact was registered successfully.
 All six expected W&B artifacts were found.
 The prediction CSV contained 9,286 records.
-Git reported a clean working tree at the time of the post-execution check.
+Git reported a clean working tree at the post-execution verification point.
+Git Repository Verification
 
-The Git working-tree check returned:
+The repository was checked using:
+
+bash
+git status
+
+
+The previously verified output was:
 
 text
 On branch main
@@ -396,7 +399,7 @@ Your branch is up to date with 'origin/main'.
 nothing to commit, working tree clean
 
 
-This confirms that the repository was clean and synchronized at that verification point. Any subsequent documentation changes should be committed and pushed separately.
+The repository has since received additional documentation changes, which are handled through separate Git commits.
 
 Conclusion
 
@@ -404,7 +407,12 @@ This project demonstrates the development and execution of a reusable end-to-end
 
 By integrating Python, Pandas, NumPy, Scikit-learn, MLflow, Hydra, Conda, and Weights & Biases, the project provides an automated workflow for data acquisition, cleaning, validation, dataset splitting, model training, model export, and evaluation.
 
-The Random Forest model achieved a test R² score of 0.5743, an MAE of $33.6050, and an RMSE of $47.9119 across 9,286 held-out test observations.
+The Random Forest model achieved:
+
+Test R²: 0.5743
+Test MAE: $33.6050
+Test RMSE: $47.9119
+Test observations: 9,286
 
 The successful execution of all six pipeline components, completion of seven validation tests, registration of the trained model, and verification of all six W&B artifacts demonstrate that the pipeline operates successfully as an integrated machine learning workflow.
 
@@ -415,3 +423,11 @@ Original Project Description
 This project is based on the Udacity Build an ML Pipeline for Short-Term Rental Prices in NYC starter project.
 
 The original business scenario focuses on a property management company that receives new rental listing data in bulk every week and needs an automated, reusable machine learning pipeline to process incoming data and retrain its price prediction model regularly.
+
+Original Starter Repository:
+
+https://github.com/udacity/build-ml-pipeline-for-short-term-rental-prices
+
+License
+
+See LICENSE.txt for license information.
