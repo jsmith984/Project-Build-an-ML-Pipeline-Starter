@@ -1,133 +1,225 @@
-NYC Airbnb Project
-Project Links:
-
-Weights & Biases Project: https://forge.coreweave.com/wandb/jsm394-western-governors-university/nyc_airbnb/reports/NYC-AirBnB-Reports--VmlldzoxODIzODI1NA
-
-GitHub Repository: https://github.com/jsmith984/Project-Build-an-ML-Pipeline-Starter
---------------------------------------------------------------------------------------------------------------------------------------
 NYC Airbnb Price Prediction – End-to-End ML Pipeline
-Project Links
-Weights & Biases Project: NYC Airbnb – W&B Dashboard
-GitHub Repository: Project-Build-an-ML-Pipeline-Starter
-(Finalize README with NYC Airbnb pipeline results)
 Project Overview
 
-This project implements a reusable, end-to-end machine learning pipeline to predict NYC Airbnb listing prices using a Random Forest regression model.
+This project implements a reusable, end-to-end machine learning pipeline to predict nightly Airbnb listing prices in New York City using a Random Forest regression model.
 
-The goal is to estimate the typical nightly rental price of an Airbnb listing based on the characteristics of similar properties.
+The project is based on the Udacity Build an ML Pipeline for Short-Term Rental Prices in NYC starter project.
 
-The pipeline automates data acquisition, cleaning, validation, preprocessing, model training, and evaluation. It uses MLflow Projects for pipeline orchestration, Hydra for configuration management, and Weights & Biases (W&B) for experiment tracking and artifact management.
+The business scenario involves a property management company that receives new rental listing data regularly and needs a repeatable process for acquiring, cleaning, validating, processing, and evaluating data before training machine learning models.
 
-The completed pipeline successfully executes all components from raw data acquisition through final model evaluation.
+The pipeline automates the complete machine learning workflow, from raw data acquisition through model training and final evaluation.
 
+The project integrates MLflow Projects for pipeline orchestration, Hydra for configuration management, Scikit-learn for machine learning, and Weights & Biases (W&B) for experiment tracking and artifact management.
+
+Project Links
+GitHub Repository: https://github.com/jsmith984/Project-Build-an-ML-Pipeline-Starter
+Weights & Biases Project: https://wandb.ai/jsm394-western-governors-university/nyc_airbnb
+Weights & Biases Reports: https://forge.coreweave.com/wandb/jsm394-western-governors-university/nyc_airbnb/reports/NYC-AirBnB-Reports--VmlldzoxODIzODI1NA
+Original Udacity Repository: https://github.com/udacity/build-ml-pipeline-for-short-term-rental-prices
 Technologies Used
-Python 3.13
-Pandas and NumPy
-Scikit-learn
-MLflow Projects
-Hydra
-Weights & Biases (W&B)
-Conda
-Git and GitHub
-Pipeline Architecture
+Technology	Purpose
+Python 3.13	Application development
+Pandas	Data processing and manipulation
+NumPy	Numerical computations
+Scikit-learn	Machine learning
+Random Forest Regressor	Price prediction
+MLflow Projects	Pipeline orchestration and model export
+Hydra	Configuration management
+Weights & Biases	Experiment tracking and artifact management
+Conda	Python environment management
+Git	Version control
+GitHub	Source code hosting
+Project Architecture
 
-The pipeline consists of the following components:
+The machine learning pipeline consists of six major components.
 
 Component	Description
-get_data	Downloads and registers the raw Airbnb dataset.
-basic_cleaning	Cleans the dataset and filters listing prices.
-data_check	Validates data quality and dataset consistency.
-data_split	Separates the dataset into training/validation and test datasets.
-train_random_forest	Trains and exports the Random Forest regression model.
-test_regression_model	Evaluates the trained model using held-out test data.
+Data Acquisition	Downloads and registers the raw Airbnb dataset.
+Basic Cleaning	Cleans the data and filters listing prices.
+Data Validation	Executes automated data quality tests.
+Data Splitting	Creates training/validation and held-out test datasets.
+Random Forest Training	Trains and exports the regression model.
+Model Evaluation	Generates predictions, calculates evaluation metrics, and registers results.
 Pipeline Workflow
 Acquire the raw NYC Airbnb dataset.
-Clean the data and remove listings outside the configured price range.
+Clean the dataset and filter listing prices.
 Validate the cleaned dataset using automated tests.
 Split the data into training/validation and test datasets.
-Train a Random Forest regression model.
-Export and register the trained model.
-Evaluate the model against the held-out test dataset.
-Log evaluation metrics and register prediction artifacts in W&B.
+Train the Random Forest regression model.
+Export the trained model using MLflow.
+Evaluate the model using previously unseen test observations.
+Log evaluation metrics and register prediction artifacts in Weights & Biases.
+Repository Structure
+
+The repository contains the following important directories and files:
+
+text
+Project-Build-an-ML-Pipeline-Starter/
+│
+├── components/
+│   ├── get_data/
+│   ├── basic_cleaning/
+│   ├── train_val_test_split/
+│   └── wandb_utils/
+│
+├── src/
+│   ├── basic_cleaning/
+│   ├── data_check/
+│   ├── eda/
+│   ├── train_random_forest/
+│   └── test_regression_model/
+│
+├── data/
+├── artifacts/
+├── images/
+│
+├── config.yaml
+├── environment.yml
+├── conda.yml
+├── MLproject
+├── main.py
+├── rf_config.json
+├── wandb_utils.py
+├── check_wandb_artifacts.py
+└── README.md
+
 Environment Setup
 Requirements
 Python 3.13
 Conda
-A Weights & Biases account and API key
+Git
+Weights & Biases account
 1. Clone the Repository
 bash
 git clone https://github.com/jsmith984/Project-Build-an-ML-Pipeline-Starter.git
 
 cd Project-Build-an-ML-Pipeline-Starter
 
-2. Create and Activate the Environment
+2. Create the Conda Environment
 bash
 conda env create -f environment.yml
 
+3. Activate the Environment
+bash
 conda activate nyc_airbnb_dev
 
-3. Configure Weights & Biases
+4. Verify Hydra Installation
+bash
+python -c "import hydra; print('Hydra installed successfully')"
 
-Obtain an API key from:
+
+Expected output:
+
+text
+Hydra installed successfully
+
+5. Configure Weights & Biases
+
+Create or access a Weights & Biases account:
+
+https://wandb.ai/
+
+Obtain an API key:
 
 https://wandb.ai/authorize
 
-Log in using:
+Authenticate using:
 
 bash
 wandb login
 
 
-The pipeline uses W&B to track experiments, store datasets, register trained models, and save evaluation results.
+Weights & Biases is used to track pipeline experiments, store datasets, register trained models, and manage evaluation results.
 
-Running the Pipeline
+Running the Machine Learning Pipeline
 
-All commands should be executed from the root directory of the repository with the nyc_airbnb_dev environment activated.
+All commands should be executed from the repository's root directory with the nyc_airbnb_dev Conda environment activated.
 
-Run the Entire Pipeline
-
-To execute all pipeline components:
-
+Execute the Complete Pipeline
 bash
 python main.py main.steps=all
 
-Run Individual Components
 
-Data Splitting
+This command executes all six pipeline components in sequence.
+
+Execute Individual Pipeline Components
+
+Individual components can also be executed through the main pipeline configuration when their required upstream artifacts are available.
+
+For example, model training:
 
 bash
-python main.py main.steps=data_split
+python main.py main.steps=train_random_forest
 
 
-Random Forest Model Training
-
-bash
-python main.py main.steps=train_random_forest modeling.random_forest.max_depth=15 modeling.random_forest.n_estimators=100
-
-
-Regression Model Evaluation
+Model evaluation:
 
 bash
 python main.py main.steps=test_regression_model
 
 
-Individual components can also be executed independently after their required W&B artifacts have been registered.
+The exact available step names are determined by the project's Hydra configuration.
 
-Configuration Management
+Data Processing Results
 
-Pipeline parameters are managed through Hydra using the project's configuration files.
+The original NYC Airbnb dataset contained 48,895 observations and 16 columns.
 
-For example, Random Forest parameters can be overridden directly from the command line:
+The basic cleaning component filtered listing prices using the configured minimum and maximum price boundaries.
 
-bash
-python main.py main.steps=train_random_forest modeling.random_forest.max_depth=15 modeling.random_forest.n_estimators=100
+Dataset Cleaning
+Processing Stage	Observations
+Original dataset	48,895
+After price filtering	46,428
+Final cleaned dataset	46,427
 
+Approximately 94.95% of the original observations were retained after cleaning.
 
-This allows model configurations to be adjusted without modifying the underlying source code.
+Data Validation
 
-Model Configuration
+The data validation component executed seven automated tests.
 
-The final Random Forest model uses the following configuration:
+The tests covered:
+
+Column name validation.
+Data boundary checks.
+Unique listing IDs.
+Missing neighborhood validation.
+Neighborhood distribution consistency.
+Dataset row count validation.
+Remaining configured validation checks.
+
+Validation Result: 7 tests passed.
+
+Nine deprecation warnings appeared during execution. These warnings originated from the Weights & Biases integration and did not cause test failures.
+
+Dataset Splitting
+
+The cleaned dataset was divided into training/validation and held-out testing datasets.
+
+Training and Testing Split
+Dataset	Observations
+Training/validation	37,141
+Held-out testing	9,286
+Total	46,427
+
+The training/validation dataset was further divided:
+
+Training and Validation Split
+Subset	Observations
+Training	29,712
+Validation	7,429
+Total	37,141
+
+The split used:
+
+Random seed: 42
+Stratification column: neighbourhood_group
+Validation proportion: 20% of the training/validation dataset
+Random Forest Model Configuration
+
+The final model uses Scikit-learn's Random Forest Regressor.
+
+The following configuration was used:
 
 Parameter	Value
 n_estimators	100
@@ -139,129 +231,187 @@ criterion	squared_error
 random_state	42
 oob_score	True
 n_jobs	-1
-Model Evaluation Results
 
-The trained Random Forest model was evaluated using a held-out test dataset containing 9,286 observations.
+The model was trained successfully using the training dataset.
 
-Final Test Metrics
+Validation performance was calculated before exporting the model.
+
+Validation Results
+Metric	Result
+RMSE	46.1633
+MAE	32.3759
+R²	0.5785
+Final Model Evaluation
+
+The trained Random Forest model was evaluated using the held-out test dataset containing 9,286 observations.
+
+The evaluation component successfully:
+
+Downloaded the registered model artifact.
+Loaded the exported MLflow model.
+Downloaded the held-out test dataset.
+Validated the required test columns.
+Prepared the test features.
+Generated the test predictions.
+Calculated regression evaluation metrics.
+Logged the results to Weights & Biases.
+Saved the test predictions.
+Registered the prediction artifact.
+Final Test Results
 Metric	Result
 RMSE	47.9119
 MAE	33.6050
 R²	0.5743
 Test Observations	9,286
-Validation Metrics
-Metric	Result
-RMSE	46.1633
-MAE	32.3759
-R²	0.5785
+Validation Versus Test Performance
+Metric	Validation	Test
+RMSE	46.1633	47.9119
+MAE	32.3759	33.6050
+R²	0.5785	0.5743
 Model Performance Analysis
 
-The final test R² score of 0.5743 indicates that the model explains approximately 57.4% of the variation in Airbnb listing prices.
+The final test R² score of 0.5743 indicates that the model explains approximately 57.4% of the variation in Airbnb listing prices within the held-out test dataset.
 
-The model achieved a test Mean Absolute Error (MAE) of approximately $33.61, meaning its predictions differed from actual listing prices by approximately $33.61 per observation on average.
+The Mean Absolute Error (MAE) of approximately $33.61 indicates that the model's predictions differ from actual listing prices by approximately $33.61 per observation on average.
 
-The validation and test metrics are relatively consistent, suggesting that the model generalizes reasonably well to previously unseen data.
+The Root Mean Squared Error (RMSE) of approximately $47.91 gives greater weight to larger prediction errors.
 
-Data Validation
+The validation and test metrics are relatively consistent, suggesting that the model maintains similar performance on previously unseen data.
 
-The data validation component successfully executed all seven automated tests.
+The results demonstrate a functioning machine learning pipeline, although there is room for further improvement in predictive accuracy.
 
-The tests cover:
+Test Predictions
 
-Column name validation
-Data boundary checks
-Unique listing IDs
-Missing neighborhood validation
-Neighborhood distribution consistency
-Dataset row count validation
+The evaluation component generated a CSV file containing the actual prices, predicted prices, and prediction errors.
 
-Result: 7 tests passed.
+Output File
+text
+src/test_regression_model/test_predictions.csv
 
-The validation process helps ensure that the data meets the expected quality and consistency requirements before model training.
 
-Experiment Tracking and Artifact Management
+The CSV contains:
 
-Weights & Biases is integrated throughout the pipeline to track experiments and manage data and model artifacts.
+Column	Description
+actual_price	Actual Airbnb listing price
+predicted_price	Model-predicted listing price
+prediction_error	Difference between actual and predicted prices
 
-The pipeline registers and tracks:
+The file contains 9,286 prediction records, plus the CSV header.
 
-Raw Airbnb dataset
-Cleaned Airbnb dataset
-Training/validation dataset
-Held-out test dataset
-Exported Random Forest model
-Test prediction results
+The generated prediction file was approximately 372 KB during the November 2, 2026 execution.
 
-The following evaluation metrics are logged to W&B:
+The prediction results were also registered as a Weights & Biases artifact.
 
+Weights & Biases Integration
+
+Weights & Biases was successfully integrated throughout the machine learning pipeline.
+
+The following artifacts were registered and verified:
+
+Artifact	Type	Verification
+sample.csv	raw_data	Verified
+clean_data.csv	clean_data	Verified
+trainval_data.csv	trainval_data	Verified
+test_data.csv	test_data	Verified
+model_export	model	Verified
+test_predictions	evaluation	Verified
+
+All six artifacts were successfully located using the project's W&B verification script.
+
+Final Evaluation Metrics Logged to W&B
+
+The following metrics were recorded:
+
+text
 test_rmse
 test_mae
 test_r2
 test_observations
 
-The final test predictions are registered in Weights & Biases
-under the artifact name test_predictions.
+November 2, 2026 Experiment Runs
+Pipeline Component	W&B Run Name
+Data Acquisition	radiant-meadow-122
+Data Cleaning	cool-deluge-123
+Data Validation	laced-firebrand-124
+Data Splitting	floral-frost-125
+Model Training	glad-plant-126
+Model Evaluation	rose-oath-127
+Weights & Biases Resources
+Project Dashboard: https://wandb.ai/jsm394-western-governors-university/nyc_airbnb
+Reports: https://forge.coreweave.com/wandb/jsm394-western-governors-university/nyc_airbnb/reports/NYC-AirBnB-Reports--VmlldzoxODIzODI1NA
+Model Export and Reproducibility
 
-The artifact contains the prediction output file generated
-by the evaluation component.
+MLflow Projects orchestrates the execution of the individual pipeline components.
 
-MLflow is used to orchestrate the pipeline components and export the trained model.
+The trained Random Forest model was successfully exported through MLflow and registered as a W&B artifact.
 
-Final Pipeline Verification
+The pipeline uses Hydra to manage configuration settings, allowing model parameters and pipeline steps to be adjusted without modifying the underlying source code.
 
-The complete pipeline was successfully executed using:
+The complete pipeline can be executed using:
 
 bash
 python main.py main.steps=all
 
 
+This provides a repeatable workflow for acquiring new data, validating records, training a model, and evaluating its performance.
+
+Final Pipeline Verification
+
+The complete machine learning pipeline was successfully executed on November 2, 2026.
+
+The final terminal output confirmed:
+
+text
+============================================================
+NYC AIRBNB ML PIPELINE COMPLETED
+============================================================
+
+
 All six pipeline components completed successfully:
 
-Data acquisition
-Data cleaning
-Data validation
-Data splitting
-Random Forest model training
-Regression model evaluation
+Data acquisition.
+Basic data cleaning.
+Data validation.
+Dataset splitting.
+Random Forest model training.
+Regression model evaluation.
 
-The final test evaluation completed successfully with an R² score of 0.5743.
+Additional verification confirmed:
 
-The repository was also verified after execution:
+Hydra was successfully installed and imported.
+Seven automated data validation tests passed.
+The MLflow model export completed successfully.
+The final test predictions were generated.
+The prediction artifact was registered successfully.
+All six expected W&B artifacts were found.
+The prediction CSV contained 9,286 records.
+Git reported a clean working tree at the time of the post-execution check.
 
-bash
-git status
-
-
-Result:
+The Git working-tree check returned:
 
 text
 On branch main
 Your branch is up to date with 'origin/main'.
 
-Final repository synchronization and working-tree status
-were verified after the final documentation and verification
-updates were committed.
+nothing to commit, working tree clean
 
 
-This confirms that the pipeline ran successfully without leaving uncommitted repository changes.
+This confirms that the repository was clean and synchronized at that verification point. Any subsequent documentation changes should be committed and pushed separately.
 
 Conclusion
 
-This project demonstrates the development of a reusable end-to-end machine learning pipeline for predicting NYC Airbnb listing prices.
+This project demonstrates the development and execution of a reusable end-to-end machine learning pipeline for predicting NYC Airbnb listing prices.
 
-By integrating MLflow, Hydra, Scikit-learn, and Weights & Biases, the project provides an automated workflow for data processing, validation, model training, evaluation, and artifact management.
+By integrating Python, Pandas, NumPy, Scikit-learn, MLflow, Hydra, Conda, and Weights & Biases, the project provides an automated workflow for data acquisition, cleaning, validation, dataset splitting, model training, model export, and evaluation.
 
-The successful execution of the complete pipeline demonstrates that the individual components work together as a reproducible machine learning workflow.
+The Random Forest model achieved a test R² score of 0.5743, an MAE of $33.6050, and an RMSE of $47.9119 across 9,286 held-out test observations.
+
+The successful execution of all six pipeline components, completion of seven validation tests, registration of the trained model, and verification of all six W&B artifacts demonstrate that the pipeline operates successfully as an integrated machine learning workflow.
+
+The project establishes a foundation for future model improvements, additional experimentation, and repeatable evaluation of new Airbnb listing data.
 
 Original Project Description
 
 This project is based on the Udacity Build an ML Pipeline for Short-Term Rental Prices in NYC starter project.
 
-The original project focuses on developing a reusable machine learning pipeline for a property management company that receives new rental data in bulk every week and needs to retrain its model regularly.
-
-Original Starter Repository:
-https://github.com/udacity/Project-Build-an-ML-Pipeline-Starter
-
-License
-
-See LICENSE.txt.
+The original business scenario focuses on a property management company that receives new rental listing data in bulk every week and needs an automated, reusable machine learning pipeline to process incoming data and retrain its price prediction model regularly.
