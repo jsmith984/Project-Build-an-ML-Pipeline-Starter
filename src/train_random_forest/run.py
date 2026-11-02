@@ -4,13 +4,17 @@ import argparse
 import json
 import logging
 import os
+import shutil
 
-import joblib
+import mlflow.sklearn
 import numpy as np
 import pandas as pd
 import wandb
 
+from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     mean_absolute_error,
     mean_squared_error,
@@ -18,11 +22,9 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from feature_engineering import (
-    build_preprocessor,
-    prepare_features,
-)
+from feature_engineering import prepare_features
 
 
 logging.basicConfig(
@@ -37,7 +39,6 @@ ENTITY = "jsm394-western-governors-university"
 
 
 def find_file(directory, extension):
-    """Find exactly one file with the specified extension."""
 
     files = []
 
@@ -54,6 +55,88 @@ def find_file(directory, extension):
     return files[0]
 
 
+# --------------------------------------------------
+# INFERENCE PIPELINE
+# --------------------------------------------------
+
+def get_inference_pipeline(rf_config, max_tfidf_features):
+
+    # Numerical preprocessing.
+    numerical_preproc = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler()),
+        ]
+    )
+
+    # Non-ordinal categorical preprocessing.
+    non_ordinal_categorical_preproc = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            (
+                "encoder",
+                OneHotEncoder(handle_unknown="ignore"),
+            ),
+        ]
+    )
+
+    # Complete preprocessing.
+    preprocessor = ColumnTransformer(
+        transformers=[
+            (
+                "numerical",
+                numerical_preproc,
+                [
+                    "latitude",
+                    "longitude",
+                    "minimum_nights",
+                    "number_of_reviews",
+                    "reviews_per_month",
+                    "calculated_host_listings_count",
+                    "availability_365",
+                ],
+            ),
+            (
+                "categorical",
+                non_ordinal_categorical_preproc,
+                [
+                    "neighbourhood_group",
+                    "neighbourhood",
+                    "room_type",
+                ],
+            ),
+            (
+                "title",
+                TfidfVectorizer(
+                    max_features=int(max_tfidf_features),
+                    stop_words="english",
+                    lowercase=True,
+                    strip_accents="unicode",
+                ),
+                "name",
+            ),
+        ],
+        remainder="drop",
+    )
+
+    # Complete sklearn inference pipeline.
+    sk_pipe = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            (
+                "random_forest",
+                RandomForestRegressor(**rf_config),
+            ),
+        ]
+    )
+
+    return sk_pipe
+
+
+# --------------------------------------------------
+# MAIN TRAINING FUNCTION
+# --------------------------------------------------
+
 def go(args):
 
     run = wandb.init(
@@ -66,16 +149,19 @@ def go(args):
 
         run.config.update(vars(args))
 
-        # Download training artifact.
-        logger.info(
-            "Downloading training artifact: %s",
-            args.trainval_artifact,
+        # Download training data.
+        logger.info("Downloading training artifact.")
+
+        artifact = run.use_artifact(
+            args.trainval_artifact
         )
 
-        artifact = run.use_artifact(args.trainval_artifact)
         artifact_dir = artifact.download()
 
-        csv_file = find_file(artifact_dir, ".csv")
+        csv_file = find_file(
+            artifact_dir,
+            ".csv",
+        )
 
         df = pd.read_csv(csv_file)
 
@@ -84,7 +170,10 @@ def go(args):
         # Prepare features and target.
         X, y = prepare_features(df)
 
-        valid_rows = y.notna() & np.isfinite(y)
+        valid_rows = (
+            y.notna()
+            & np.isfinite(y)
+        )
 
         X = X.loc[valid_rows].copy()
         y = y.loc[valid_rows].copy()
@@ -92,17 +181,21 @@ def go(args):
         if len(X) < 2:
             raise ValueError("Not enough valid rows to train.")
 
-        # Split into training and validation sets.
+        # Stratification.
         stratify = None
 
         if args.stratify_by.lower() != "none":
+
             if args.stratify_by not in df.columns:
                 raise ValueError(
-                    f"Stratification column '{args.stratify_by}' "
-                    "does not exist."
+                    f"Stratification column "
+                    f"{args.stratify_by} does not exist."
                 )
 
-            stratify = df.loc[valid_rows, args.stratify_by]
+            stratify = df.loc[
+                valid_rows,
+                args.stratify_by,
+            ]
 
             if stratify.isna().any():
                 raise ValueError(
@@ -115,6 +208,7 @@ def go(args):
                     "two observations."
                 )
 
+        # Training and validation split.
         X_train, X_val, y_train, y_val = train_test_split(
             X,
             y,
@@ -126,40 +220,30 @@ def go(args):
         logger.info("Training dimensions: %s", X_train.shape)
         logger.info("Validation dimensions: %s", X_val.shape)
 
-        # Load Random Forest parameters.
+        # Load Random Forest configuration.
         with open(args.rf_config, "r") as fp:
             rf_config = json.load(fp)
 
         logger.info("Random Forest configuration: %s", rf_config)
 
-        # Build preprocessing pipeline.
-        preprocessor = build_preprocessor(
-            X_train.assign(price=y_train),
-            max_tfidf_features=int(args.max_tfidf_features),
+        # Build the inference pipeline.
+        sk_pipe = get_inference_pipeline(
+            rf_config,
+            args.max_tfidf_features,
         )
 
-        # Initialize model.
-        rf_model = RandomForestRegressor(
-            **rf_config
-        )
-
-        # Combine preprocessing and model.
-        model = Pipeline(
-            steps=[
-                ("preprocessor", preprocessor),
-                ("regressor", rf_model),
-            ]
-        )
-
-        # Train model.
+        # Fit the complete pipeline.
         logger.info("Training Random Forest model.")
 
-        model.fit(X_train, y_train)
+        sk_pipe.fit(
+            X_train,
+            y_train,
+        )
 
         # Validation predictions.
-        predictions = model.predict(X_val)
+        predictions = sk_pipe.predict(X_val)
 
-        # Calculate metrics.
+        # Calculate regression metrics.
         rmse = np.sqrt(
             mean_squared_error(y_val, predictions)
         )
@@ -178,40 +262,58 @@ def go(args):
         logger.info("Validation MAE: %.4f", mae)
         logger.info("Validation R2: %.4f", r2)
 
-        # Log metrics to W&B.
+        # Log MAE and other metrics to W&B.
         run.log(
             {
-                "validation_rmse": float(rmse),
+                "MAE": float(mae),
                 "validation_mae": float(mae),
+                "validation_rmse": float(rmse),
                 "validation_r2": float(r2),
             }
         )
 
-        # Export model.
-        output_dir = "model_export"
-        os.makedirs(output_dir, exist_ok=True)
+        # --------------------------------------------------
+        # EXPORT MODEL USING MLFLOW
+        # --------------------------------------------------
 
-        model_file = os.path.join(
-            output_dir,
-            "model.joblib",
+        export_path = "model_export"
+
+        if os.path.exists(export_path):
+            shutil.rmtree(export_path)
+
+        logger.info("Exporting model using MLflow.")
+
+        mlflow.sklearn.save_model(
+            sk_pipe,
+            export_path,
         )
 
-        joblib.dump(model, model_file)
+        logger.info(
+            "MLflow model exported successfully."
+        )
 
-        logger.info("Saved model: %s", model_file)
+        # --------------------------------------------------
+        # REGISTER MODEL ARTIFACT IN W&B
+        # --------------------------------------------------
 
-        # Register model artifact.
         model_artifact = wandb.Artifact(
             name=args.output_artifact,
             type="model",
-            description="NYC Airbnb Random Forest regression model",
+            description=(
+                "NYC Airbnb Random Forest "
+                "MLflow sklearn model"
+            ),
         )
 
-        model_artifact.add_file(model_file)
+        model_artifact.add_dir(export_path)
+
+        # Only latest is automatic.
+        # The prod alias will be applied manually
+        # to the best-performing model after the sweep.
 
         run.log_artifact(
             model_artifact,
-            aliases=["latest", "prod"],
+            aliases=["latest"],
         )
 
         logger.info("Model registered successfully.")
@@ -219,6 +321,10 @@ def go(args):
     finally:
         run.finish()
 
+
+# --------------------------------------------------
+# COMMAND-LINE ARGUMENTS
+# --------------------------------------------------
 
 if __name__ == "__main__":
 

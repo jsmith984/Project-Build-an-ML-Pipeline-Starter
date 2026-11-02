@@ -27,15 +27,11 @@ def log_artifact(
     artifact.add_file(filename)
 
     logged_artifact = wandb_run.log_artifact(
-        artifact
+        artifact,
+        aliases=["latest"],
     )
 
     # Wait for artifact registration.
     logged_artifact.wait()
-
-    print(
-        "Registered artifact:",
-        logged_artifact.name,
-    )
 
     return logged_artifact

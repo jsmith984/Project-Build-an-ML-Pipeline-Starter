@@ -7,12 +7,13 @@ against the held-out test dataset.
 Steps:
 1. Initialize a W&B run.
 2. Download the registered production model.
-3. Download the held-out test dataset.
-4. Validate and prepare the test data.
-5. Generate predictions.
-6. Calculate regression metrics.
-7. Log metrics to W&B.
-8. Save and register test predictions.
+3. Load the MLflow sklearn model.
+4. Download the held-out test dataset.
+5. Validate and prepare the test data.
+6. Generate predictions.
+7. Calculate regression metrics.
+8. Log metrics to W&B.
+9. Save and register test predictions.
 """
 
 import argparse
@@ -20,7 +21,7 @@ import logging
 import os
 import sys
 
-import joblib
+import mlflow.sklearn
 import numpy as np
 import pandas as pd
 import wandb
@@ -145,36 +146,40 @@ def go(args):
 
         model_dir = model_artifact.download()
 
-        model_file = find_file(
-            model_dir,
-            ".joblib",
-        )
-
-        if not os.path.isfile(model_file):
+        if not os.path.isdir(model_dir):
 
             raise FileNotFoundError(
-                f"Model file not found: {model_file}"
+                f"MLflow model directory not found: {model_dir}"
             )
 
-        model = joblib.load(model_file)
+        # ------------------------------------------
+        # STEP 2: Load MLflow sklearn model
+        # ------------------------------------------
+
+        logger.info("=" * 65)
+        logger.info("STEP 2: LOADING MLFLOW MODEL")
+        logger.info("=" * 65)
+
+        model = mlflow.sklearn.load_model(
+            model_dir
+        )
 
         if not hasattr(model, "predict"):
 
             raise TypeError(
-                "Loaded model does not implement predict()."
+                "Loaded MLflow model does not implement predict()."
             )
 
         logger.info(
-            "Production model loaded successfully: %s",
-            model_file,
+            "MLflow sklearn model loaded successfully."
         )
 
         # ------------------------------------------
-        # STEP 2: Download held-out test dataset
+        # STEP 3: Download held-out test dataset
         # ------------------------------------------
 
         logger.info("=" * 65)
-        logger.info("STEP 2: DOWNLOADING TEST DATASET")
+        logger.info("STEP 3: DOWNLOADING TEST DATASET")
         logger.info("=" * 65)
 
         logger.info(
@@ -212,11 +217,11 @@ def go(args):
             )
 
         # ------------------------------------------
-        # STEP 3: Validate required columns
+        # STEP 4: Validate required columns
         # ------------------------------------------
 
         logger.info("=" * 65)
-        logger.info("STEP 3: VALIDATING TEST DATA")
+        logger.info("STEP 4: VALIDATING TEST DATA")
         logger.info("=" * 65)
 
         required_columns = [
@@ -246,11 +251,11 @@ def go(args):
         )
 
         # ------------------------------------------
-        # STEP 4: Prepare features and target
+        # STEP 5: Prepare test features and target
         # ------------------------------------------
 
         logger.info("=" * 65)
-        logger.info("STEP 4: PREPARING TEST FEATURES")
+        logger.info("STEP 5: PREPARING TEST FEATURES")
         logger.info("=" * 65)
 
         X_test, y_test = prepare_features(df)
@@ -261,7 +266,7 @@ def go(args):
                 "Feature and target row counts do not match."
             )
 
-        # Convert target to numeric and remove invalid values.
+        # Convert target to numeric.
         y_test = pd.to_numeric(
             y_test,
             errors="coerce",
@@ -297,14 +302,16 @@ def go(args):
         )
 
         # ------------------------------------------
-        # STEP 5: Generate predictions
+        # STEP 6: Generate predictions
         # ------------------------------------------
 
         logger.info("=" * 65)
-        logger.info("STEP 5: GENERATING PREDICTIONS")
+        logger.info("STEP 6: GENERATING PREDICTIONS")
         logger.info("=" * 65)
 
-        predictions = model.predict(X_test)
+        predictions = model.predict(
+            X_test
+        )
 
         predictions = np.asarray(
             predictions,
@@ -329,11 +336,11 @@ def go(args):
         )
 
         # ------------------------------------------
-        # STEP 6: Calculate regression metrics
+        # STEP 7: Calculate regression metrics
         # ------------------------------------------
 
         logger.info("=" * 65)
-        logger.info("STEP 6: CALCULATING TEST METRICS")
+        logger.info("STEP 7: CALCULATING TEST METRICS")
         logger.info("=" * 65)
 
         rmse = np.sqrt(
@@ -380,11 +387,11 @@ def go(args):
         logger.info("-----------------------------------------")
 
         # ------------------------------------------
-        # STEP 7: Log metrics to W&B
+        # STEP 8: Log metrics to W&B
         # ------------------------------------------
 
         logger.info("=" * 65)
-        logger.info("STEP 7: LOGGING METRICS TO W&B")
+        logger.info("STEP 8: LOGGING METRICS TO W&B")
         logger.info("=" * 65)
 
         run.log(
@@ -401,11 +408,11 @@ def go(args):
         )
 
         # ------------------------------------------
-        # STEP 8: Save test predictions
+        # STEP 9: Save test predictions
         # ------------------------------------------
 
         logger.info("=" * 65)
-        logger.info("STEP 8: SAVING TEST PREDICTIONS")
+        logger.info("STEP 9: SAVING TEST PREDICTIONS")
         logger.info("=" * 65)
 
         results = pd.DataFrame(
@@ -431,11 +438,11 @@ def go(args):
         )
 
         # ------------------------------------------
-        # STEP 9: Register prediction artifact
+        # STEP 10: Register prediction artifact
         # ------------------------------------------
 
         logger.info("=" * 65)
-        logger.info("STEP 9: REGISTERING PREDICTIONS")
+        logger.info("STEP 10: REGISTERING PREDICTIONS")
         logger.info("=" * 65)
 
         results_artifact = wandb.Artifact(
@@ -484,7 +491,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description=(
-            "Evaluate the production NYC Airbnb "
+            "Evaluate the NYC Airbnb "
             "Random Forest regression model."
         )
     )
@@ -493,7 +500,7 @@ if __name__ == "__main__":
         "--mlflow_model",
         type=str,
         required=True,
-        help="W&B production model artifact reference.",
+        help="W&B MLflow model artifact reference.",
     )
 
     parser.add_argument(

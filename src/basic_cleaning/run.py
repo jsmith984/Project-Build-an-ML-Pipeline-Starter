@@ -151,7 +151,7 @@ def go(args):
         )
 
         # Export cleaned dataset.
-        output_file = "clean_sample.csv"
+        output_file = "clean_data.csv"
 
         df.to_csv(
             output_file,

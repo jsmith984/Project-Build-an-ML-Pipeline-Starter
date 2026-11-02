@@ -130,8 +130,8 @@ def go(config: DictConfig):
             "src/basic_cleaning",
             {
                 "input_artifact": "sample.csv:latest",
-                "output_artifact": "clean_sample.csv",
-                "output_type": "clean_sample",
+                "output_artifact": "clean_data.csv",
+                "output_type": "clean_data",
                 "output_description": "Cleaned Airbnb data",
                 "min_price": config.etl.min_price,
                 "max_price": config.etl.max_price,
@@ -148,8 +148,8 @@ def go(config: DictConfig):
             root_dir,
             "src/data_check",
             {
-                "csv": "clean_sample.csv:latest",
-                "ref": "clean_sample.csv:reference",
+                "csv": "clean_data.csv:latest",
+                "ref": "sample.csv:latest",
                 "kl_threshold": config.data_check.kl_threshold,
                 "min_price": config.etl.min_price,
                 "max_price": config.etl.max_price,
@@ -166,7 +166,7 @@ def go(config: DictConfig):
             root_dir,
             "components/train_val_test_split",
             {
-                "input": "clean_sample.csv:latest",
+                "input": "clean_data.csv:latest",
                 "test_size": config.modeling.test_size,
                 "random_seed": config.modeling.random_seed,
                 "stratify_by": config.modeling.stratify_by,
@@ -216,7 +216,7 @@ def go(config: DictConfig):
             root_dir,
             "src/test_regression_model",
             {
-                "model_artifact": "model_export:prod",
+                "model_artifact": "model_export:latest",
                 "test_artifact": "test_data.csv:latest",
             },
         )

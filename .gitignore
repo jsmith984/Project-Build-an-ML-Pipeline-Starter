@@ -145,3 +145,13 @@ mlruns/
 outputs/
 random_forest_dir/
 multirun/
+
+# Generated MLflow model exports
+src/train_random_forest/model_export/
+
+# Generated pipeline datasets
+src/basic_cleaning/clean_data.csv
+src/test_regression_model/test_predictions.csv
+
+# Generated root-level model exports
+/model_export/
