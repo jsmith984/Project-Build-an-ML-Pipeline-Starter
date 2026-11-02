@@ -198,7 +198,11 @@ test_mae
 test_r2
 test_observations
 
-The final test predictions are saved as test_predictions.csv and registered as a W&B artifact.
+The final test predictions are registered in Weights & Biases
+under the artifact name test_predictions.
+
+The artifact contains the prediction output file generated
+by the evaluation component.
 
 MLflow is used to orchestrate the pipeline components and export the trained model.
 
@@ -233,7 +237,9 @@ text
 On branch main
 Your branch is up to date with 'origin/main'.
 
-nothing to commit, working tree clean
+Final repository synchronization and working-tree status
+were verified after the final documentation and verification
+updates were committed.
 
 
 This confirms that the pipeline ran successfully without leaving uncommitted repository changes.
