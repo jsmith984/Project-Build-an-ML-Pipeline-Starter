@@ -4,190 +4,257 @@ Weights & Biases Project: https://forge.coreweave.com/wandb/jsm394-western-gover
 
 GitHub Repository: https://github.com/jsmith984/Project-Build-an-ML-Pipeline-Starter
 --------------------------------------------------------------------------------------------------------------------------------------
+NYC Airbnb Price Prediction – End-to-End ML Pipeline
+Project Links
+Weights & Biases Project: NYC Airbnb – W&B Dashboard
+GitHub Repository: Project-Build-an-ML-Pipeline-Starter
+(Finalize README with NYC Airbnb pipeline results)
 Project Overview
 
-Build an ML Pipeline for Short-Term Rental Prices in NYC.
+This project implements a reusable, end-to-end machine learning pipeline to predict NYC Airbnb listing prices using a Random Forest regression model.
 
-This project develops a reusable end-to-end machine learning pipeline to estimate short-term rental prices for NYC Airbnb properties. The pipeline processes incoming data, performs data validation and cleaning, trains a Random Forest model, and evaluates model performance.
+The goal is to estimate the typical nightly rental price of an Airbnb listing based on the characteristics of similar properties.
 
-# Build an ML Pipeline for Short-Term Rental Prices in NYC
-You are working for a property management company renting rooms and properties for short periods of 
-time on various rental platforms. You need to estimate the typical price for a given property based 
-on the price of similar properties. Your company receives new data in bulk every week. The model needs 
-to be retrained with the same cadence, necessitating an end-to-end pipeline that can be reused.
+The pipeline automates data acquisition, cleaning, validation, preprocessing, model training, and evaluation. It uses MLflow Projects for pipeline orchestration, Hydra for configuration management, and Weights & Biases (W&B) for experiment tracking and artifact management.
 
-In this project you will build such a pipeline.
+The completed pipeline successfully executes all components from raw data acquisition through final model evaluation.
 
-## Table of contents
+Technologies Used
+Python 3.13
+Pandas and NumPy
+Scikit-learn
+MLflow Projects
+Hydra
+Weights & Biases (W&B)
+Conda
+Git and GitHub
+Pipeline Architecture
 
-- [Preliminary steps](#preliminary-steps)
-  * [Fork the Starter Kit](#fork-the-starter-kit)
-  * [Create environment](#create-environment)
-  * [Get API key for Weights and Biases](#get-api-key-for-weights-and-biases)
-  * [The configuration](#the-configuration)
-  * [Running the entire pipeline or just a selection of steps](#Running-the-entire-pipeline-or-just-a-selection-of-steps)
-  * [Pre-existing components](#pre-existing-components)
+The pipeline consists of the following components:
 
-## Preliminary steps
+Component	Description
+get_data	Downloads and registers the raw Airbnb dataset.
+basic_cleaning	Cleans the dataset and filters listing prices.
+data_check	Validates data quality and dataset consistency.
+data_split	Separates the dataset into training/validation and test datasets.
+train_random_forest	Trains and exports the Random Forest regression model.
+test_regression_model	Evaluates the trained model using held-out test data.
+Pipeline Workflow
+Acquire the raw NYC Airbnb dataset.
+Clean the data and remove listings outside the configured price range.
+Validate the cleaned dataset using automated tests.
+Split the data into training/validation and test datasets.
+Train a Random Forest regression model.
+Export and register the trained model.
+Evaluate the model against the held-out test dataset.
+Log evaluation metrics and register prediction artifacts in W&B.
+Environment Setup
+Requirements
+Python 3.13
+Conda
+A Weights & Biases account and API key
+1. Clone the Repository
+bash
+git clone https://github.com/jsmith984/Project-Build-an-ML-Pipeline-Starter.git
 
-### Supported Operating Systems
-
-This project is compatible with the following operating systems:
-
-- **Ubuntu 22.04** (Jammy Jellyfish) - both Ubuntu installation and WSL (Windows Subsystem for Linux)
-- **Ubuntu 24.04** - both Ubuntu installation and WSL (Windows Subsystem for Linux)
-- **macOS** - compatible with recent macOS versions
-
-Please ensure you are using one of the supported OS versions to avoid compatibility issues.
-
-### Python Requirement
-
-This project requires **Python 3.13**. Please ensure that you have Python 3.13 installed and set as the default version in your environment to avoid any runtime issues.
-
-### Fork the Starter kit
-Go to [https://github.com/udacity/Project-Build-an-ML-Pipeline-Starter](https://github.com/udacity/Project-Build-an-ML-Pipeline-Starter)
-and click on `Fork` in the upper right corner. This will create a fork in your Github account, i.e., a copy of the
-repository that is under your control. Now clone the repository locally so you can start working on it:
-
-```
-git clone https://github.com/[your github username]/Project-Build-an-ML-Pipeline-Starter.git
-```
-
-and go into the repository:
-
-```
 cd Project-Build-an-ML-Pipeline-Starter
-```
-Commit and push to the repository often while you make progress towards the solution. Remember 
-to add meaningful commit messages.
 
-### Create environment
-Make sure to have conda installed and ready, then create a new environment using the ``environment.yaml``
-file provided in the root of the repository and activate it:
+2. Create and Activate the Environment
+bash
+conda env create -f environment.yml
 
-```bash
-> conda env create -f environment.yml
-> conda activate nyc_airbnb_dev
-```
+conda activate nyc_airbnb_dev
 
-### Get API key for Weights and Biases
-Let's make sure we are logged in to Weights & Biases. Get your API key from W&B by going to 
-[https://wandb.ai/authorize](https://wandb.ai/authorize) and click on the + icon (copy to clipboard), 
-then paste your key into this command:
+3. Configure Weights & Biases
 
-```bash
-> wandb login [your API key]
-```
+Obtain an API key from:
 
-You should see a message similar to:
-```
-wandb: Appending key for api.wandb.ai to your netrc file: /home/[your username]/.netrc
-```
+https://wandb.ai/authorize
+
+Log in using:
+
+bash
+wandb login
 
 
-### The configuration
-As usual, the parameters controlling the pipeline are defined in the ``config.yaml`` file defined in
-the root of the starter kit. We will use Hydra to manage this configuration file. 
-Open this file and get familiar with its content. Remember: this file is only read by the ``main.py`` script 
-(i.e., the pipeline) and its content is
-available with the ``go`` function in ``main.py`` as the ``config`` dictionary. For example,
-the name of the project is contained in the ``project_name`` key under the ``main`` section in
-the configuration file. It can be accessed from the ``go`` function as 
-``config["main"]["project_name"]``.
+The pipeline uses W&B to track experiments, store datasets, register trained models, and save evaluation results.
 
-NOTE: do NOT hardcode any parameter when writing the pipeline. All the parameters should be 
-accessed from the configuration file.
+Running the Pipeline
 
-### Running the entire pipeline or just a selection of steps
-In order to run the pipeline when you are developing, you need to be in the root of the starter kit, 
-then you can execute as usual:
+All commands should be executed from the root directory of the repository with the nyc_airbnb_dev environment activated.
 
-```bash
->  mlflow run .
-```
-This will run the entire pipeline.
+Run the Entire Pipeline
 
-When developing it is useful to be able to run one step at the time. Say you want to run only
-the ``download`` step. The `main.py` is written so that the steps are defined at the top of the file, in the 
-``_steps`` list, and can be selected by using the `steps` parameter on the command line:
+To execute all pipeline components:
 
-```bash
-> mlflow run . -P steps=download
-```
-If you want to run the ``download`` and the ``basic_cleaning`` steps, you can similarly do:
-```bash
-> mlflow run . -P steps=download,basic_cleaning
-```
-You can override any other parameter in the configuration file using the Hydra syntax, by
-providing it as a ``hydra_options`` parameter. For example, say that we want to set the parameter
-modeling -> random_forest -> n_estimators to 10 and etl->min_price to 50:
+bash
+python main.py main.steps=all
 
-```bash
-> mlflow run . \
-  -P steps=download,basic_cleaning \
-  -P hydra_options="modeling.random_forest.n_estimators=10 etl.min_price=50"
-```
+Run Individual Components
 
-### Pre-existing components
-In order to simulate a real-world situation, we are providing you with some pre-implemented
-re-usable components. While you have a copy in your fork, you will be using them from the original
-repository by accessing them through their GitHub link, like:
+Data Splitting
 
-```python
-_ = mlflow.run(
-                f"{config['main']['components_repository']}/get_data",
-                "main",
-                version='main',
-                env_manager="conda",
-                parameters={
-                    "sample": config["etl"]["sample"],
-                    "artifact_name": "sample.csv",
-                    "artifact_type": "raw_data",
-                    "artifact_description": "Raw file as downloaded"
-                },
-            )
-```
-where `config['main']['components_repository']` is set to 
-[https://github.com/udacity/Project-Build-an-ML-Pipeline-Starter/tree/main/components](https://github.com/udacity/Project-Build-an-ML-Pipeline-Starter/tree/main/components).
-You can see the parameters that they require by looking into their `MLproject` file:
-
-- `get_data`: downloads the data. [MLproject](https://github.com/udacity/Project-Build-an-ML-Pipeline-Starter/blob/main/components/get_data/MLproject)
-- `train_val_test_split`: segrgate the data (splits the data) [MLproject](https://github.com/udacity/Project-Build-an-ML-Pipeline-Starter/blob/main/components/train_val_test_split/MLproject)
-
-## In case of errors
-
-### Environments
-When you make an error writing your `conda.yml` file, you might end up with an environment for the pipeline or one
-of the components that is corrupted. Most of the time `mlflow` realizes that and creates a new one every time you try
-to fix the problem. However, sometimes this does not happen, especially if the problem was in the `pip` dependencies.
-In that case, you might want to clean up all conda environments created by `mlflow` and try again. In order to do so,
-you can get a list of the environments you are about to remove by executing:
-
-```
-> conda info --envs | grep mlflow | cut -f1 -d" "
-```
-
-If you are ok with that list, execute this command to clean them up:
-
-**_NOTE_**: this will remove *ALL* the environments with a name starting with `mlflow`. Use at your own risk
-
-```
-> for e in $(conda info --envs | grep mlflow | cut -f1 -d" "); do conda uninstall --name $e --all -y;done
-```
-
-This will iterate over all the environments created by `mlflow` and remove them.
-
-### MLflow & Wandb
-
-If you see the any error while running the command:
-
-```
-> mlflow run .
-```
-
-Please, make sure all steps are using **the same** python version and that you have **conda installed**. Additionally, *mlflow* and *wandb* packages are crucial and should have the same version.
+bash
+python main.py main.steps=data_split
 
 
-## License
+Random Forest Model Training
 
-[License](LICENSE.txt)
+bash
+python main.py main.steps=train_random_forest modeling.random_forest.max_depth=15 modeling.random_forest.n_estimators=100
+
+
+Regression Model Evaluation
+
+bash
+python main.py main.steps=test_regression_model
+
+
+Individual components can also be executed independently after their required W&B artifacts have been registered.
+
+Configuration Management
+
+Pipeline parameters are managed through Hydra using the project's configuration files.
+
+For example, Random Forest parameters can be overridden directly from the command line:
+
+bash
+python main.py main.steps=train_random_forest modeling.random_forest.max_depth=15 modeling.random_forest.n_estimators=100
+
+
+This allows model configurations to be adjusted without modifying the underlying source code.
+
+Model Configuration
+
+The final Random Forest model uses the following configuration:
+
+Parameter	Value
+n_estimators	100
+max_depth	15
+min_samples_split	4
+min_samples_leaf	3
+max_features	0.5
+criterion	squared_error
+random_state	42
+oob_score	True
+n_jobs	-1
+Model Evaluation Results
+
+The trained Random Forest model was evaluated using a held-out test dataset containing 9,286 observations.
+
+Final Test Metrics
+Metric	Result
+RMSE	47.9119
+MAE	33.6050
+R²	0.5743
+Test Observations	9,286
+Validation Metrics
+Metric	Result
+RMSE	46.1633
+MAE	32.3759
+R²	0.5785
+Model Performance Analysis
+
+The final test R² score of 0.5743 indicates that the model explains approximately 57.4% of the variation in Airbnb listing prices.
+
+The model achieved a test Mean Absolute Error (MAE) of approximately $33.61, meaning its predictions differed from actual listing prices by approximately $33.61 per observation on average.
+
+The validation and test metrics are relatively consistent, suggesting that the model generalizes reasonably well to previously unseen data.
+
+Data Validation
+
+The data validation component successfully executed all seven automated tests.
+
+The tests cover:
+
+Column name validation
+Data boundary checks
+Unique listing IDs
+Missing neighborhood validation
+Neighborhood distribution consistency
+Dataset row count validation
+
+Result: 7 tests passed.
+
+The validation process helps ensure that the data meets the expected quality and consistency requirements before model training.
+
+Experiment Tracking and Artifact Management
+
+Weights & Biases is integrated throughout the pipeline to track experiments and manage data and model artifacts.
+
+The pipeline registers and tracks:
+
+Raw Airbnb dataset
+Cleaned Airbnb dataset
+Training/validation dataset
+Held-out test dataset
+Exported Random Forest model
+Test prediction results
+
+The following evaluation metrics are logged to W&B:
+
+test_rmse
+test_mae
+test_r2
+test_observations
+
+The final test predictions are saved as test_predictions.csv and registered as a W&B artifact.
+
+MLflow is used to orchestrate the pipeline components and export the trained model.
+
+Final Pipeline Verification
+
+The complete pipeline was successfully executed using:
+
+bash
+python main.py main.steps=all
+
+
+All six pipeline components completed successfully:
+
+Data acquisition
+Data cleaning
+Data validation
+Data splitting
+Random Forest model training
+Regression model evaluation
+
+The final test evaluation completed successfully with an R² score of 0.5743.
+
+The repository was also verified after execution:
+
+bash
+git status
+
+
+Result:
+
+text
+On branch main
+Your branch is up to date with 'origin/main'.
+
+nothing to commit, working tree clean
+
+
+This confirms that the pipeline ran successfully without leaving uncommitted repository changes.
+
+Conclusion
+
+This project demonstrates the development of a reusable end-to-end machine learning pipeline for predicting NYC Airbnb listing prices.
+
+By integrating MLflow, Hydra, Scikit-learn, and Weights & Biases, the project provides an automated workflow for data processing, validation, model training, evaluation, and artifact management.
+
+The successful execution of the complete pipeline demonstrates that the individual components work together as a reproducible machine learning workflow.
+
+Original Project Description
+
+This project is based on the Udacity Build an ML Pipeline for Short-Term Rental Prices in NYC starter project.
+
+The original project focuses on developing a reusable machine learning pipeline for a property management company that receives new rental data in bulk every week and needs to retrain its model regularly.
+
+Original Starter Repository:
+https://github.com/udacity/Project-Build-an-ML-Pipeline-Starter
+
+License
+
+See LICENSE.txt.
