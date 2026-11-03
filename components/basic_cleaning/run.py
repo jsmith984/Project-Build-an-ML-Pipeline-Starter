@@ -32,27 +32,47 @@ def go(args):
         # Log configuration parameters
         run.config.update(vars(args))
 
-        # Download the input artifact from W&B
+        # Download input artifact
         logger.info("Downloading input artifact...")
 
         artifact = run.use_artifact(args.input_artifact)
         artifact_dir = artifact.download()
 
-        # Read the downloaded CSV file
-        df = pd.read_csv(
-            os.path.join(artifact_dir, "sample1.csv")
-        )
+        # Locate CSV file dynamically
+        csv_files = [
+            os.path.join(root, filename)
+            for root, _, files in os.walk(artifact_dir)
+            for filename in files
+            if filename.lower().endswith(".csv")
+        ]
+
+        if len(csv_files) != 1:
+            raise ValueError(
+                f"Expected exactly one CSV file, "
+                f"found: {csv_files}"
+            )
+
+        # Read dataset
+        df = pd.read_csv(csv_files[0])
 
         logger.info(f"Original dataset shape: {df.shape}")
 
         # Filter price outliers
-        min_price = args.min_price
-        max_price = args.max_price
+        logger.info(
+            f"Filtering prices between "
+            f"{args.min_price} and {args.max_price}"
+        )
 
-        idx = df["price"].between(min_price, max_price)
+        idx = df["price"].between(
+            args.min_price,
+            args.max_price
+        )
+
         df = df[idx].copy()
 
-        logger.info(f"After price filtering: {df.shape}")
+        logger.info(
+            f"After price filtering: {df.shape}"
+        )
 
         # Convert last_review to datetime
         df["last_review"] = pd.to_datetime(
@@ -61,6 +81,8 @@ def go(args):
         )
 
         # Remove listings outside NYC geographic boundaries
+        logger.info("Filtering geographic boundaries...")
+
         idx = (
             df["longitude"].between(-74.25, -73.50)
             & df["latitude"].between(40.5, 41.2)
@@ -68,16 +90,23 @@ def go(args):
 
         df = df[idx].copy()
 
-        logger.info(f"After geographic filtering: {df.shape}")
+        logger.info(
+            f"After geographic filtering: {df.shape}"
+        )
 
-        # Save the cleaned dataset
+        # Save cleaned dataset
         output_file = "clean_sample.csv"
 
-        df.to_csv(output_file, index=False)
+        df.to_csv(
+            output_file,
+            index=False
+        )
 
-        logger.info(f"Saved cleaned dataset to {output_file}")
+        logger.info(
+            f"Saved cleaned dataset to {output_file}"
+        )
 
-        # Create the output artifact
+        # Create output W&B artifact
         cleaned_artifact = wandb.Artifact(
             args.output_artifact,
             type=args.output_type,
@@ -86,20 +115,26 @@ def go(args):
 
         cleaned_artifact.add_file(output_file)
 
-        # Upload cleaned artifact to W&B
+        # Upload cleaned artifact
         logger.info("Uploading cleaned artifact...")
 
         run.log_artifact(cleaned_artifact)
 
-        # Wait for artifact upload to finish
-        run.finish()
-
-        logger.info("Basic cleaning completed successfully!")
+        logger.info(
+            "Basic cleaning completed successfully!"
+        )
 
     except Exception:
+
         logger.exception("Basic cleaning failed!")
+
         run.finish(exit_code=1)
+
         raise
+
+    else:
+
+        run.finish()
 
 
 if __name__ == "__main__":
@@ -126,7 +161,7 @@ if __name__ == "__main__":
         "--output_type",
         type=str,
         required=True,
-        help="Type of the output W&B artifact"
+        help="Type of the output dataset"
     )
 
     parser.add_argument(
