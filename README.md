@@ -194,25 +194,43 @@ Dataset Splitting
 
 The cleaned dataset was divided into training/validation and held-out testing datasets.
 
-Training and Testing Split
-Dataset	Observations
-Training/validation	37,141
-Held-out testing	9,286
-Total	46,427
+Original Pipeline Training Split
+
+The original November 2 training experiment used the following dataset counts:
+
+Dataset                 Observations
+Training/validation     37,141
+Held-out testing        9,286
+Total                   46,427
 
 The training/validation dataset was further divided:
 
-Training and Validation Split
-Subset	Observations
-Training	29,712
-Validation	7,429
-Total	37,141
+Subset          Observations
+Training        29,712
+Validation      7,429
+Total           37,141
 
-The split used:
+The original split used:
 
 Random seed: 42
 Stratification column: neighbourhood_group
 Validation proportion: 20% of the training/validation dataset
+
+Current Local Dataset Verification – November 3, 2026
+
+A subsequent inspection of the current root-level CSV files identified:
+
+Dataset                 Observations
+Training/validation     37,143
+Held-out testing        9,284
+Total                   46,427
+
+Both datasets contain valid price targets. No duplicate listing IDs or overlapping listing IDs were found.
+
+The current local test dataset contains 9,284 observations, which were used for the independent November 3 model evaluation.
+
+The original training experiment and the subsequent independent evaluation are documented separately because their dataset counts differ.
+
 Random Forest Model Configuration
 
 The final model uses Scikit-learn's Random Forest Regressor.
@@ -237,65 +255,75 @@ MAE	32.3759
 R²	0.5785
 Final Model Evaluation
 
-The trained Random Forest model was evaluated using the held-out test dataset containing 9,286 observations.
+The exported Random Forest model was independently evaluated on November 3, 2026, using the current held-out test dataset and the existing MLflow model artifact.
 
-The evaluation component successfully:
+The evaluation used evaluate_test.py and did not retrain the model or modify its hyperparameters.
 
-Downloaded the registered model artifact.
+The evaluation successfully:
+
 Loaded the exported MLflow model.
-Downloaded the held-out test dataset.
-Validated the required test columns.
-Prepared the test features.
-Generated price predictions.
-Calculated regression evaluation metrics.
-Logged the results to Weights & Biases.
-Saved the test predictions.
-Registered the prediction artifact.
-Final Test Results
-Metric	Result
-RMSE	47.9119
-MAE	33.6050
-R²	0.5743
-Test observations	9,286
+Loaded the held-out test dataset.
+Applied the original feature engineering function.
+Generated predictions for previously unseen observations.
+Calculated RMSE, MAE, and R².
+Saved the evaluation results as JSON.
+
+Final Test Results – November 3, 2026
+
+Metric          Result
+RMSE            39.6831
+MAE             27.7701
+R²              0.6913
+Test observations 9,284
+
 Validation Versus Test Performance
-Metric	Validation	Test
-RMSE	46.1633	47.9119
-MAE	32.3759	33.6050
-R²	0.5785	0.5743
+
+Metric          Validation      Test
+RMSE            46.1633         39.6831
+MAE             32.3759         27.7701
+R²              0.5785          0.6913
+
 Model Performance Analysis
 
-The final test R² score of 0.5743 indicates that the model explains approximately 57.4% of the variation in Airbnb listing prices within the held-out test dataset.
+The final test R² score of 0.6913 indicates that the model explains approximately 69.1% of the variation in Airbnb listing prices within the held-out test dataset.
 
-The Mean Absolute Error (MAE) of approximately $33.61 indicates that the model's predictions differ from actual listing prices by approximately $33.61 per observation on average.
+The Mean Absolute Error (MAE) of approximately $27.77 indicates that predictions differ from actual listing prices by approximately $27.77 per observation on average.
 
-The Root Mean Squared Error (RMSE) of approximately $47.91 gives greater weight to larger prediction errors.
+The Root Mean Squared Error (RMSE) of approximately $39.68 gives greater weight to larger prediction errors.
 
-The validation and test metrics are relatively consistent, suggesting that the model maintains similar performance on previously unseen data.
+Test performance was better than validation performance. This suggests encouraging generalization performance, although differences in the difficulty of the validation and test samples may contribute to the results.
 
-The results demonstrate a functioning machine learning pipeline, although there is room for further improvement in predictive accuracy.
+The actual mean test price was $122.02, compared with a mean predicted price of $122.50.
 
-Test Predictions
+Evaluation Reproducibility
 
-The evaluation component generated a CSV file containing actual prices, predicted prices, and prediction errors.
+The independent evaluation script is:
 
-Output file:
+text
+evaluate_test.py
+
+Run it from the repository root using:
+
+bash
+python evaluate_test.py
+
+The script loads the existing MLflow model and evaluates the held-out test dataset without retraining.
+
+Evaluation results are saved to:
+
+text
+artifacts/test_evaluation.json
+
+The artifacts directory is excluded from Git through .gitignore. The evaluation script and its documented results are maintained in the repository.
+
+Historical Test Prediction Artifact
+
+An earlier pipeline execution generated:
 
 text
 src/test_regression_model/test_predictions.csv
 
-
-The CSV contains:
-
-Column	Description
-actual_price	Actual Airbnb listing price
-predicted_price	Model-predicted listing price
-prediction_error	Difference between actual and predicted prices
-
-The file contains 9,286 prediction records, plus the CSV header.
-
-The generated prediction file was approximately 372 KB during the November 2, 2026 execution.
-
-The prediction results were also registered as a Weights & Biases artifact.
+That historical prediction artifact contained 9,286 observations. Its metrics are not the results of the November 3 independent evaluation documented above. The current evaluation uses the 9,284 observations in test_data.csv.
 
 Weights & Biases Integration
 
@@ -409,10 +437,10 @@ By integrating Python, Pandas, NumPy, Scikit-learn, MLflow, Hydra, Conda, and We
 
 The Random Forest model achieved:
 
-Test R²: 0.5743
-Test MAE: $33.6050
-Test RMSE: $47.9119
-Test observations: 9,286
+Test R²: 0.6913
+Test MAE: $27.7701
+Test RMSE: $39.6831
+Test observations: 9,284
 
 The successful execution of all six pipeline components, completion of seven validation tests, registration of the trained model, and verification of all six W&B artifacts demonstrate that the pipeline operates successfully as an integrated machine learning workflow.
 
