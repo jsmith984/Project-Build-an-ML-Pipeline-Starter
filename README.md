@@ -13,9 +13,7 @@ The project integrates MLflow Projects for pipeline orchestration, Hydra for con
 
 Project Links
 GitHub Repository: https://github.com/jsmith984/Project-Build-an-ML-Pipeline-Starter
-Weights & Biases Reports: [https://forge.coreweave.com/wandb/jsm394-western-governors-university/nyc_airbnb/reports/NYC-AirBnB-Reports--VmlldzoxODIzODI1NA]
-(https://forge.coreweave.com/wandb/jsm394-western-governors-university/nyc_airbnb/reports/NYC-Airbnb-ML-Pipeline-Evaluation-Report--VmlldzoxODI0ODc4MA?accessToken=v76ln741vmlx55eo3n0ec2mmfzj6so7ob0f7ak9qbx46dph6jbrxk1y2dh2n2v1o)
-Original Udacity Repository: https://github.com/udacity/build-ml-pipeline-for-short-term-rental-prices
+Weights & Biases: https://forge.coreweave.com/wandb/jsm394-western-governors-university/nyc_airbnb/reports/NYC-Airbnb-ML-Pipeline-Evaluation-Report--VmlldzoxODI0ODc4MA?accessToken=v76ln741vmlx55eo3n0ec2mmfzj6so7ob0f7ak9qbx46dph6jbrxk1y2dh2n2v1o
 Technologies Used
 Technology	Purpose
 Python 3.13	Application development
